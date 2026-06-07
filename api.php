@@ -156,6 +156,55 @@ switch ($action) {
         }
         break;
 
+    case 'renameUser':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '请先登录']);
+            break;
+        }
+
+        $newUsername = trim($_POST['username'] ?? '');
+        if (strlen($newUsername) < 2 || strlen($newUsername) > 20) {
+            echo json_encode(['success' => false, 'message' => '用户名长度需2-20字符']);
+            break;
+        }
+
+        $oldUsername = $_SESSION['username'];
+        $users = readUsers();
+        $userFound = false;
+        $exists = false;
+
+        foreach ($users as &$user) {
+            if ($user['username'] === $oldUsername) {
+                $userFound = true;
+            } elseif ($user['username'] === $newUsername) {
+                $exists = true;
+            }
+        }
+
+        if ($exists) {
+            echo json_encode(['success' => false, 'message' => '用户名已被占用']);
+            break;
+        }
+
+        if (!$userFound) {
+            echo json_encode(['success' => false, 'message' => '用户不存在']);
+            break;
+        }
+
+        // 更新用户名
+        foreach ($users as &$user) {
+            if ($user['username'] === $oldUsername) {
+                $user['username'] = $newUsername;
+                break;
+            }
+        }
+        saveUsers($users);
+        $_SESSION['username'] = $newUsername;
+
+        echo json_encode(['success' => true, 'message' => '修改成功', 'username' => $newUsername]);
+        break;
+
     case 'uploadAvatar':
         session_start();
         if (!isset($_SESSION['username'])) {

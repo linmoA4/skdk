@@ -418,6 +418,28 @@
             font-size: 13px;
             margin-bottom: 15px;
         }
+        .username-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .username-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 2px solid #e8e8e8;
+            border-radius: 20px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .username-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .username-current {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
         .modal-btn {
             padding: 12px 28px;
             border: none;
@@ -535,7 +557,12 @@
             <h3>设置头像</h3>
             <img class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%23667eea'/%3E%3Cpath d='M60 30c-8.3 0-15 6.7-15 15v5h-2c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h34c2.2 0 4-1.8 4-4V54c0-2.2-1.8-4-4-4h-2v-5c0-8.3-6.7-15-15-15z' fill='white' opacity='0.9'/%3E%3Ccircle cx='60' cy='45' r='12' fill='%23667eea'/%3E%3C/svg%3E">
             <input type="file" class="file-input" id="avatarInput" accept="image/*">
-            <div class="upload-hint" id="uploadHint">点击图片选择新头像</div>
+            <div class="upload-hint" id="uploadHint">点击图片更换头像</div>
+            <div class="username-section">
+                <input type="text" class="username-input" id="usernameInput" placeholder="输入新用户名" maxlength="20">
+                <button class="modal-btn modal-btn-primary" id="renameBtn" onclick="updateUsername()">修改</button>
+            </div>
+            <div class="username-current" id="usernameCurrent"></div>
             <button class="modal-btn modal-btn-secondary" onclick="closeAvatarModal()">关闭</button>
         </div>
     </div>
@@ -827,8 +854,10 @@
         function openAvatarModal() {
             document.getElementById('avatarModal').classList.add('active');
             document.getElementById('avatarInput').value = '';
-            document.getElementById('uploadHint').textContent = '点击图片选择新头像';
+            document.getElementById('uploadHint').textContent = '点击图片更换头像';
             document.getElementById('avatarPreview').src = currentUser?.avatar || document.getElementById('avatarPreview').src;
+            document.getElementById('usernameInput').value = '';
+            document.getElementById('usernameCurrent').textContent = '当前: ' + (currentUser?.username || '');
         }
 
         function closeAvatarModal() {
@@ -887,6 +916,63 @@
                     if (avatarContainer) {
                         avatarContainer.outerHTML = `<img src="${newAvatar}" class="message-avatar">`;
                     }
+                }
+            });
+        }
+
+        // 修改用户名
+        async function updateUsername() {
+            const newUsername = document.getElementById('usernameInput').value.trim();
+            if (!newUsername || newUsername.length < 2) {
+                document.getElementById('usernameCurrent').textContent = '用户名长度需2-20字符';
+                return;
+            }
+
+            const btn = document.getElementById('renameBtn');
+            btn.disabled = true;
+            btn.textContent = '修改中...';
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'renameUser');
+                formData.append('username', newUsername);
+
+                const response = await fetch('api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const oldUsername = currentUser.username;
+                    currentUser.username = newUsername;
+                    document.getElementById('displayUsername').textContent = newUsername;
+                    document.getElementById('headerAvatar').innerHTML = `<img src="${currentUser.avatar}" class="avatar">`;
+                    document.getElementById('usernameInput').value = '';
+                    document.getElementById('usernameCurrent').textContent = '修改成功！';
+                    // 更新所有自己发的消息的用户名
+                    updateAllMessagesUsername(oldUsername, newUsername);
+                    setTimeout(() => {
+                        closeAvatarModal();
+                    }, 800);
+                } else {
+                    document.getElementById('usernameCurrent').textContent = data.message;
+                }
+            } catch (err) {
+                document.getElementById('usernameCurrent').textContent = '修改失败';
+            }
+
+            btn.textContent = '修改';
+            btn.disabled = false;
+        }
+
+        // 更新所有消息的用户名
+        function updateAllMessagesUsername(oldUsername, newUsername) {
+            const messages = document.querySelectorAll('.message');
+            messages.forEach(msg => {
+                const userSpan = msg.querySelector('.message-user');
+                if (userSpan && userSpan.textContent === oldUsername) {
+                    userSpan.textContent = newUsername;
                 }
             });
         }
