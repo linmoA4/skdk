@@ -321,6 +321,11 @@
             margin: 0 auto 20px;
             object-fit: cover;
             border: 3px solid #667eea;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .avatar-preview:hover {
+            transform: scale(1.05);
         }
         .file-input {
             display: none;
@@ -435,9 +440,8 @@
     <div class="avatar-upload-modal" id="avatarModal">
         <div class="modal-content">
             <h3>设置头像</h3>
-            <img class="avatar-preview" id="avatarPreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><circle cx='60' cy='60' r='60' fill='%23667eea'/><text x='60' y='70' font-size='50' fill='white' text-anchor='middle'>?</text></svg>">
+            <img class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><circle cx='60' cy='60' r='60' fill='%23667eea'/><text x='60' y='70' font-size='50' fill='white' text-anchor='middle'>?</text></svg>">
             <input type="file" class="file-input" id="avatarInput" accept="image/*">
-            <button class="select-btn" onclick="document.getElementById('avatarInput').click()">选择图片</button>
             <button class="upload-btn" id="uploadAvatarBtn" onclick="uploadAvatar()" disabled>上传</button>
             <button class="select-btn" onclick="closeAvatarModal()">取消</button>
         </div>

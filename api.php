@@ -173,14 +173,14 @@ switch ($action) {
                     if (!empty($user['avatar']) && file_exists($uploadDir . $user['avatar'])) {
                         unlink($uploadDir . $user['avatar']);
                     }
-                    $user['avatar'] = 'avatars/' . $filename;
+                    $user['avatar'] = 'uploads/avatars/' . $filename;
                     break;
                 }
             }
             saveUsers($users);
-            $_SESSION['avatar'] = 'avatars/' . $filename;
+            $_SESSION['avatar'] = 'uploads/avatars/' . $filename;
 
-            echo json_encode(['success' => true, 'avatar' => 'avatars/' . $filename]);
+            echo json_encode(['success' => true, 'avatar' => 'uploads/avatars/' . $filename]);
         } else {
             echo json_encode(['success' => false, 'message' => '保存失败']);
         }
