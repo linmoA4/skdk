@@ -10,6 +10,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// 获取当前域名的完整URL
+function getBaseUrl() {
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
+    return rtrim($protocol . $host . $scriptDir, '/');
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $uploadDir = __DIR__ . '/uploads/';
 $avatarsDir = $uploadDir . 'avatars/';
@@ -114,8 +122,10 @@ switch ($action) {
             if ($user['username'] === $username && password_verify($password, $user['password'])) {
                 session_start();
                 $_SESSION['username'] = $username;
-                $_SESSION['avatar'] = $user['avatar'] ?? '';
-                echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $username, 'avatar' => $user['avatar']]);
+                $avatar = $user['avatar'] ?? '';
+                $_SESSION['avatar'] = $avatar;
+                $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
+                echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $username, 'avatar' => $avatarUrl]);
                 break;
             }
         }
@@ -134,10 +144,12 @@ switch ($action) {
     case 'getUser':
         session_start();
         if (isset($_SESSION['username'])) {
+            $avatar = $_SESSION['avatar'] ?? '';
+            $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
             echo json_encode([
                 'success' => true,
                 'username' => $_SESSION['username'],
-                'avatar' => $_SESSION['avatar'] ?? ''
+                'avatar' => $avatarUrl
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => '未登录']);
@@ -171,20 +183,21 @@ switch ($action) {
         if (move_uploaded_file($file['tmp_name'], $filepath)) {
             // 更新用户头像
             $users = readUsers();
+            $relativePath = 'uploads/avatars/' . $filename;
             foreach ($users as &$user) {
                 if ($user['username'] === $username) {
                     // 删除旧头像
                     if (!empty($user['avatar']) && file_exists($uploadDir . $user['avatar'])) {
                         unlink($uploadDir . $user['avatar']);
                     }
-                    $user['avatar'] = 'uploads/avatars/' . $filename;
+                    $user['avatar'] = $relativePath;
                     break;
                 }
             }
             saveUsers($users);
-            $_SESSION['avatar'] = 'uploads/avatars/' . $filename;
+            $_SESSION['avatar'] = $relativePath;
 
-            echo json_encode(['success' => true, 'avatar' => 'uploads/avatars/' . $filename]);
+            echo json_encode(['success' => true, 'avatar' => getBaseUrl() . '/' . $relativePath]);
         } else {
             echo json_encode(['success' => false, 'message' => '保存失败']);
         }
@@ -231,8 +244,10 @@ switch ($action) {
                 if (count($parts) >= 4) {
                     $timestamp = intval($parts[3]);
                     if ($timestamp > $lastTime) {
+                        $avatar = $parts[0];
+                        $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
                         $msg = [
-                            'avatar' => $parts[0],
+                            'avatar' => $avatarUrl,
                             'username' => $parts[1],
                             'message' => $parts[2],
                             'timestamp' => $timestamp
@@ -280,7 +295,7 @@ switch ($action) {
             $line = "{$avatar}|{$username}|[语音消息: uploads/{$filename}]|{$timestamp}|{$durationStr}\n";
             file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
 
-            echo json_encode(['success' => true, 'audio' => 'uploads/' . $filename, 'timestamp' => $timestamp, 'duration' => $durationStr]);
+            echo json_encode(['success' => true, 'audio' => getBaseUrl() . '/uploads/' . $filename, 'timestamp' => $timestamp, 'duration' => $durationStr]);
         } else {
             echo json_encode(['success' => false, 'message' => '保存失败']);
         }
