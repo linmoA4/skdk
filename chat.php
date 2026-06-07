@@ -413,6 +413,11 @@
         .file-input {
             display: none;
         }
+        .upload-hint {
+            color: #999;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
         .modal-btn {
             padding: 12px 28px;
             border: none;
@@ -530,8 +535,8 @@
             <h3>设置头像</h3>
             <img class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%23667eea'/%3E%3Cpath d='M60 30c-8.3 0-15 6.7-15 15v5h-2c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h34c2.2 0 4-1.8 4-4V54c0-2.2-1.8-4-4-4h-2v-5c0-8.3-6.7-15-15-15z' fill='white' opacity='0.9'/%3E%3Ccircle cx='60' cy='45' r='12' fill='%23667eea'/%3E%3C/svg%3E">
             <input type="file" class="file-input" id="avatarInput" accept="image/*">
-            <button class="modal-btn modal-btn-primary" id="uploadAvatarBtn" onclick="uploadAvatar()" disabled>上传</button>
-            <button class="modal-btn modal-btn-secondary" onclick="closeAvatarModal()">取消</button>
+            <div class="upload-hint" id="uploadHint">点击图片选择新头像</div>
+            <button class="modal-btn modal-btn-secondary" onclick="closeAvatarModal()">关闭</button>
         </div>
     </div>
 
@@ -809,11 +814,12 @@
             }
         }
 
-        // 头像上传
+        // 头像上传 - 选择即自动上传
         function openAvatarModal() {
             document.getElementById('avatarModal').classList.add('active');
             document.getElementById('avatarInput').value = '';
-            document.getElementById('uploadAvatarBtn').disabled = true;
+            document.getElementById('uploadHint').textContent = '点击图片选择新头像';
+            document.getElementById('avatarPreview').src = currentUser?.avatar || document.getElementById('avatarPreview').src;
         }
 
         function closeAvatarModal() {
@@ -826,23 +832,17 @@
                 const reader = new FileReader();
                 reader.onload = function(ev) {
                     document.getElementById('avatarPreview').src = ev.target.result;
-                    document.getElementById('uploadAvatarBtn').disabled = false;
+                    document.getElementById('uploadHint').textContent = '正在上传...';
+                    uploadAvatarFile(file);
                 };
                 reader.readAsDataURL(file);
             }
         });
 
-        async function uploadAvatar() {
-            const input = document.getElementById('avatarInput');
-            if (!input.files[0]) return;
-
-            const btn = document.getElementById('uploadAvatarBtn');
-            btn.disabled = true;
-            btn.textContent = '上传中...';
-
+        async function uploadAvatarFile(file) {
             const formData = new FormData();
             formData.append('action', 'uploadAvatar');
-            formData.append('avatar', input.files[0]);
+            formData.append('avatar', file);
 
             try {
                 const response = await fetch('api.php', {
@@ -853,19 +853,33 @@
 
                 if (data.success) {
                     currentUser.avatar = data.avatar;
-                    if (currentUser.avatar) {
-                        document.getElementById('headerAvatar').innerHTML = `<img src="${currentUser.avatar}" class="avatar">`;
-                    }
-                    closeAvatarModal();
+                    document.getElementById('headerAvatar').innerHTML = `<img src="${currentUser.avatar}" class="avatar">`;
+                    document.getElementById('uploadHint').textContent = '上传成功！';
+                    // 更新所有自己发的消息的头像
+                    updateAllMessagesAvatar(currentUser.username, currentUser.avatar);
+                    setTimeout(() => {
+                        closeAvatarModal();
+                    }, 800);
                 } else {
-                    alert(data.message);
+                    document.getElementById('uploadHint').textContent = data.message;
                 }
             } catch (err) {
-                alert('上传失败');
+                document.getElementById('uploadHint').textContent = '上传失败';
             }
+        }
 
-            btn.textContent = '上传';
-            btn.disabled = false;
+        // 更新所有消息的头像
+        function updateAllMessagesAvatar(username, newAvatar) {
+            const messages = document.querySelectorAll('.message');
+            messages.forEach(msg => {
+                const userSpan = msg.querySelector('.message-user');
+                if (userSpan && userSpan.textContent === username) {
+                    const avatarContainer = msg.querySelector('.message-avatar') || msg.querySelector('.message-avatar-placeholder');
+                    if (avatarContainer) {
+                        avatarContainer.outerHTML = `<img src="${newAvatar}" class="message-avatar">`;
+                    }
+                }
+            });
         }
 
         async function logout() {
