@@ -83,22 +83,26 @@ switch ($action) {
         }
 
         $users = readUsers();
+        $exists = false;
         foreach ($users as $user) {
             if ($user['username'] === $username) {
-                echo json_encode(['success' => false, 'message' => '用户名已存在']);
+                $exists = true;
                 break;
             }
         }
 
-        $users[] = [
-            'username' => $username,
-            'password' => password_hash($password, PASSWORD_DEFAULT),
-            'avatar' => '',
-            'created' => time()
-        ];
-        saveUsers($users);
-
-        echo json_encode(['success' => true, 'message' => '注册成功']);
+        if ($exists) {
+            echo json_encode(['success' => false, 'message' => '用户名已存在']);
+        } else {
+            $users[] = [
+                'username' => $username,
+                'password' => password_hash($password, PASSWORD_DEFAULT),
+                'avatar' => '',
+                'created' => time()
+            ];
+            saveUsers($users);
+            echo json_encode(['success' => true, 'message' => '注册成功']);
+        }
         break;
 
     case 'login':
