@@ -11,23 +11,25 @@
             box-sizing: border-box;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
-            height: 100vh;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
             color: white;
             padding: 15px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
         }
         .header h1 {
             font-size: 22px;
+            font-weight: 600;
         }
         .user-info {
             display: flex;
@@ -41,6 +43,11 @@
             border: 2px solid white;
             object-fit: cover;
             cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s;
+        }
+        .avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
         .avatar-placeholder {
             width: 40px;
@@ -51,23 +58,30 @@
             align-items: center;
             justify-content: center;
             font-size: 18px;
+            font-weight: 600;
             cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+        }
+        .avatar-placeholder:hover {
+            transform: scale(1.1);
+            background: rgba(255,255,255,0.3);
         }
         .username {
             font-weight: 500;
         }
         .logout-btn {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.15);
             color: white;
-            border: none;
+            border: 1px solid rgba(255,255,255,0.3);
             padding: 8px 16px;
             border-radius: 20px;
             cursor: pointer;
             font-size: 14px;
-            transition: background 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .logout-btn:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-2px);
         }
         .chat-container {
             flex: 1;
@@ -75,8 +89,8 @@
             width: 100%;
             margin: 20px auto;
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 30px rgba(0,0,0,0.1);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -91,11 +105,11 @@
             display: flex;
             gap: 12px;
             margin-bottom: 20px;
-            animation: fadeIn 0.3s ease;
+            animation: messageIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes messageIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .message.self {
             flex-direction: row-reverse;
@@ -106,6 +120,10 @@
             border-radius: 50%;
             object-fit: cover;
             flex-shrink: 0;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .message:hover .message-avatar {
+            transform: scale(1.05);
         }
         .message-avatar-placeholder {
             width: 45px;
@@ -145,24 +163,25 @@
             background: white;
             padding: 12px 16px;
             border-radius: 18px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
             color: #333;
-            line-height: 1.5;
+            line-height: 1.6;
             word-wrap: break-word;
+            transition: transform 0.2s;
+        }
+        .message-text:hover {
+            transform: translateY(-1px);
         }
         .message.self .message-text {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        .message-text a {
-            color: inherit;
-            text-decoration: underline;
-        }
         .message-audio {
             background: white;
-            padding: 10px 16px;
+            padding: 12px 18px;
             border-radius: 18px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            min-width: 200px;
         }
         .message.self .message-audio {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -170,37 +189,69 @@
         .audio-player {
             display: flex;
             align-items: center;
-            gap: 10px;
-            color: #333;
+            gap: 12px;
         }
-        .message.self .audio-player {
-            color: white;
-        }
-        .audio-player button {
-            width: 36px;
-            height: 36px;
+        .play-btn {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             border: none;
-            background: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             cursor: pointer;
-            font-size: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
         }
-        .audio-player button:hover {
+        .play-btn:hover {
             transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
-        .message.self .audio-player button {
+        .play-btn:active {
+            transform: scale(0.95);
+        }
+        .message.self .play-btn {
             background: white;
             color: #667eea;
+        }
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 30px;
+            flex: 1;
+        }
+        .wave-bar {
+            width: 3px;
+            background: linear-gradient(to top, #667eea, #764ba2);
+            border-radius: 2px;
+            transition: height 0.15s ease;
+        }
+        .message.self .wave-bar {
+            background: linear-gradient(to top, #fff, rgba(255,255,255,0.7));
+        }
+        .wave-bar.playing {
+            animation: wave 0.5s ease-in-out infinite;
+        }
+        @keyframes wave {
+            0%, 100% { transform: scaleY(0.5); }
+            50% { transform: scaleY(1); }
+        }
+        .audio-duration {
+            font-size: 12px;
+            color: #666;
+            margin-left: 8px;
+            font-weight: 500;
+        }
+        .message.self .audio-duration {
+            color: rgba(255,255,255,0.8);
         }
         .input-area {
             padding: 20px;
             background: white;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #f0f0f0;
             display: flex;
             gap: 12px;
             align-items: flex-end;
@@ -214,20 +265,22 @@
         #messageInput {
             flex: 1;
             padding: 14px 18px;
-            border: 2px solid #e1e1e1;
+            border: 2px solid #e8e8e8;
             border-radius: 25px;
             font-size: 16px;
             resize: none;
             max-height: 120px;
             font-family: inherit;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
         #messageInput:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         .btn-group {
             display: flex;
-            gap: 8px;
+            gap: 10px;
         }
         .btn {
             width: 50px;
@@ -235,52 +288,70 @@
             border-radius: 50%;
             border: none;
             cursor: pointer;
-            font-size: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .btn:hover {
-            transform: scale(1.05);
+            transform: scale(1.1);
+        }
+        .btn:active {
+            transform: scale(0.95);
         }
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
         }
         .btn-send {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn-send:hover {
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
         }
         .btn-record {
             background: #4caf50;
             color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        .btn-record:hover {
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
         }
         .btn-record.recording {
             background: #f44336;
-            animation: pulse 1s infinite;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+            animation: recordPulse 1s ease-in-out infinite;
         }
-        @keyframes pulse {
+        @keyframes recordPulse {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            50% { transform: scale(1.08); }
         }
         .recording-indicator {
             display: none;
             align-items: center;
             gap: 8px;
-            color: #f44336;
-            font-size: 14px;
-            padding: 10px 15px;
-            background: #ffebee;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
             border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
         }
         .recording-indicator.active {
             display: flex;
         }
         .recording-dot {
-            width: 10px;
-            height: 10px;
-            background: #f44336;
+            width: 8px;
+            height: 8px;
+            background: white;
             border-radius: 50%;
             animation: blink 1s infinite;
         }
@@ -296,9 +367,15 @@
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
             z-index: 1000;
             justify-content: center;
             align-items: center;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         .avatar-upload-modal.active {
             display: flex;
@@ -309,6 +386,11 @@
             border-radius: 20px;
             text-align: center;
             max-width: 400px;
+            animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
         }
         .modal-content h3 {
             margin-bottom: 20px;
@@ -322,37 +404,45 @@
             object-fit: cover;
             border: 3px solid #667eea;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .avatar-preview:hover {
             transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
         }
         .file-input {
             display: none;
         }
-        .select-btn, .upload-btn {
-            padding: 12px 24px;
+        .modal-btn {
+            padding: 12px 28px;
             border: none;
             border-radius: 25px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 15px;
+            font-weight: 500;
             margin: 5px;
-            transition: transform 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .select-btn {
-            background: #e1e1e1;
-            color: #333;
+        .modal-btn-secondary {
+            background: #f0f0f0;
+            color: #666;
         }
-        .upload-btn {
+        .modal-btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        .modal-btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
-        .select-btn:hover, .upload-btn:hover {
-            transform: scale(1.05);
+        .modal-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
         }
-        .upload-btn:disabled {
+        .modal-btn-primary:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
         }
         .login-prompt {
             display: flex;
@@ -365,14 +455,13 @@
         }
         .login-prompt h2 {
             color: #333;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            font-size: 24px;
         }
         .login-prompt p {
             color: #666;
             margin-bottom: 30px;
-        }
-        .login-prompt .btn-group {
-            justify-content: center;
+            font-size: 16px;
         }
         .login-prompt a {
             padding: 14px 32px;
@@ -381,23 +470,12 @@
             text-decoration: none;
             border-radius: 25px;
             font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
         .login-prompt a:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #999;
-        }
-        .empty-state .icon {
-            font-size: 60px;
-            margin-bottom: 20px;
-        }
-        .empty-state p {
-            font-size: 16px;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
         }
     </style>
 </head>
@@ -415,10 +493,8 @@
         <div class="messages" id="messages">
             <div class="login-prompt" id="loginPrompt">
                 <h2>欢迎来到聊天群</h2>
-                <p>请先登录后再参与聊天</p>
-                <div class="btn-group">
-                    <a href="index.php">前往登录</a>
-                </div>
+                <p>登录后可参与聊天</p>
+                <a href="index.php">前往登录</a>
             </div>
         </div>
 
@@ -431,8 +507,20 @@
                 </div>
             </div>
             <div class="btn-group">
-                <button class="btn btn-record" id="recordBtn" title="按住说话">🎤</button>
-                <button class="btn btn-send" id="sendBtn" title="发送消息">➤</button>
+                <button class="btn btn-record" id="recordBtn" title="按住说话">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                </button>
+                <button class="btn btn-send" id="sendBtn" title="发送消息">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>
@@ -440,10 +528,10 @@
     <div class="avatar-upload-modal" id="avatarModal">
         <div class="modal-content">
             <h3>设置头像</h3>
-            <img class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><circle cx='60' cy='60' r='60' fill='%23667eea'/><text x='60' y='70' font-size='50' fill='white' text-anchor='middle'>?</text></svg>">
+            <img class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Ccircle cx='60' cy='60' r='60' fill='%23667eea'/%3E%3Cpath d='M60 30c-8.3 0-15 6.7-15 15v5h-2c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h34c2.2 0 4-1.8 4-4V54c0-2.2-1.8-4-4-4h-2v-5c0-8.3-6.7-15-15-15z' fill='white' opacity='0.9'/%3E%3Ccircle cx='60' cy='45' r='12' fill='%23667eea'/%3E%3C/svg%3E">
             <input type="file" class="file-input" id="avatarInput" accept="image/*">
-            <button class="upload-btn" id="uploadAvatarBtn" onclick="uploadAvatar()" disabled>上传</button>
-            <button class="select-btn" onclick="closeAvatarModal()">取消</button>
+            <button class="modal-btn modal-btn-primary" id="uploadAvatarBtn" onclick="uploadAvatar()" disabled>上传</button>
+            <button class="modal-btn modal-btn-secondary" onclick="closeAvatarModal()">取消</button>
         </div>
     </div>
 
@@ -456,6 +544,7 @@
         let isRecording = false;
         let recordingStartTime = 0;
         let recordingTimer = null;
+        let currentPlayingAudio = null;
 
         // 检查登录状态
         async function checkLogin() {
@@ -510,6 +599,16 @@
             }
         }
 
+        function generateWaveformBars(count = 20) {
+            let bars = '';
+            for (let i = 0; i < count; i++) {
+                const height = Math.random() * 20 + 8;
+                const delay = i * 0.05;
+                bars += `<div class="wave-bar" style="height: ${height}px; animation-delay: ${delay}s;"></div>`;
+            }
+            return bars;
+        }
+
         function addMessageToUI(msg) {
             const messagesDiv = document.getElementById('messages');
             const isSelf = msg.username === currentUser.username;
@@ -526,11 +625,19 @@
                 const audioMatch = msg.message.match(/\[语音消息: (.+)\]/);
                 if (audioMatch) {
                     const audioSrc = audioMatch[1];
+                    const duration = msg.duration || '0:00';
                     contentHtml = `
                         <div class="message-audio">
                             <div class="audio-player">
-                                <button onclick="playAudio(this, '${audioSrc}')">▶</button>
-                                <span>语音消息</span>
+                                <button class="play-btn" onclick="playAudio(this, '${audioSrc}')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                    </svg>
+                                </button>
+                                <div class="waveform" data-playing="false">
+                                    ${generateWaveformBars(15)}
+                                </div>
+                                <span class="audio-duration">${duration}</span>
                             </div>
                         </div>
                     `;
@@ -555,15 +662,49 @@
         }
 
         function playAudio(btn, src) {
-            const audio = new Audio(src);
-            if (btn.textContent === '▶') {
-                audio.play();
-                btn.textContent = '⏸';
-                audio.onended = () => btn.textContent = '▶';
-            } else {
-                audio.pause();
-                btn.textContent = '▶';
+            // 停止当前播放的音频
+            if (currentPlayingAudio && currentPlayingAudio !== btn) {
+                currentPlayingAudio.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                currentPlayingAudio.closest('.message-audio').querySelector('.waveform').dataset.playing = 'false';
+                currentPlayingAudio.closest('.message-audio').querySelectorAll('.wave-bar').forEach(bar => bar.classList.remove('playing'));
             }
+
+            const waveform = btn.closest('.message-audio').querySelector('.waveform');
+            const isPlaying = waveform.dataset.playing === 'true';
+
+            if (isPlaying) {
+                // 暂停
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                waveform.dataset.playing = 'false';
+                btn.closest('.message-audio').querySelectorAll('.wave-bar').forEach(bar => bar.classList.remove('playing'));
+                currentPlayingAudio = null;
+            } else {
+                // 播放
+                const audio = new Audio(src);
+                audio.onloadedmetadata = () => {
+                    const duration = formatDuration(audio.duration);
+                    btn.closest('.message-audio').querySelector('.audio-duration').textContent = duration;
+                };
+                audio.play();
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                waveform.dataset.playing = 'true';
+                btn.closest('.message-audio').querySelectorAll('.wave-bar').forEach(bar => bar.classList.add('playing'));
+                currentPlayingAudio = btn;
+
+                audio.onended = () => {
+                    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                    waveform.dataset.playing = 'false';
+                    btn.closest('.message-audio').querySelectorAll('.wave-bar').forEach(bar => bar.classList.remove('playing'));
+                    currentPlayingAudio = null;
+                };
+            }
+        }
+
+        function formatDuration(seconds) {
+            if (isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         function escapeHtml(text) {
@@ -620,7 +761,7 @@
                 recordingStartTime = Date.now();
 
                 document.getElementById('recordBtn').classList.add('recording');
-                document.getElementById('recordBtn').textContent = '⏹';
+                document.getElementById('recordBtn').innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`;
                 document.getElementById('recordingIndicator').classList.add('active');
 
                 recordingTimer = setInterval(() => {
@@ -641,7 +782,7 @@
                 clearInterval(recordingTimer);
 
                 document.getElementById('recordBtn').classList.remove('recording');
-                document.getElementById('recordBtn').textContent = '🎤';
+                document.getElementById('recordBtn').innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
                 document.getElementById('recordingIndicator').classList.remove('active');
                 document.getElementById('recordingTime').textContent = '0:00';
 
@@ -651,9 +792,12 @@
 
         async function uploadAudio() {
             const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+
             const formData = new FormData();
             formData.append('action', 'uploadAudio');
             formData.append('audio', blob, 'recording.webm');
+            formData.append('duration', duration);
 
             try {
                 await fetch('api.php', {

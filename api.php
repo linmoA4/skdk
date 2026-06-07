@@ -227,12 +227,17 @@ switch ($action) {
                 if (count($parts) >= 4) {
                     $timestamp = intval($parts[3]);
                     if ($timestamp > $lastTime) {
-                        $messages[] = [
+                        $msg = [
                             'avatar' => $parts[0],
                             'username' => $parts[1],
                             'message' => $parts[2],
                             'timestamp' => $timestamp
                         ];
+                        // 第5个字段是语音时长
+                        if (isset($parts[4])) {
+                            $msg['duration'] = $parts[4];
+                        }
+                        $messages[] = $msg;
                     }
                 }
             }
@@ -256,36 +261,25 @@ switch ($action) {
         $file = $_FILES['audio'];
         $username = $_SESSION['username'];
         $timestamp = time();
-        $filename = $username . '_' . $timestamp . '.mp3';
+        $duration = intval($_POST['duration'] ?? 0);
+
+        // 直接保存 webm 格式（现代浏览器原生支持）
+        $filename = $username . '_' . $timestamp . '.webm';
         $filepath = $audiosDir . $filename;
 
-        // 直接保存为 MP3（浏览器录音通常是 webm 格式，转为 mp3 需要额外处理）
-        // 这里简单处理：如果不是 mp3 则转换
-        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (move_uploaded_file($file['tmp_name'], $filepath)) {
+            // 保存消息记录，包含时长
+            $avatar = $_SESSION['avatar'] ?? '';
+            $mins = intval($duration / 60);
+            $secs = $duration % 60;
+            $durationStr = $mins . ':' . str_pad($secs, 2, '0', STR_PAD_LEFT);
+            $line = "{$avatar}|{$username}|[语音消息: uploads/{$filename}]|{$timestamp}|{$durationStr}\n";
+            file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
 
-        if ($ext === 'webm' || $file['type'] === 'audio/webm') {
-            // 尝试转换为 mp3
-            $webmPath = $filepath . '.webm';
-            move_uploaded_file($file['tmp_name'], $webmPath);
-
-            // 如果有 ffmpeg 则转换，否则直接使用 webm
-            if (file_exists('/usr/bin/ffmpeg')) {
-                exec("ffmpeg -i " . escapeshellarg($webmPath) . " -y " . escapeshellarg($filepath));
-                unlink($webmPath);
-            } else {
-                $filepath = $webmPath;
-                $filename = $filename . '.webm';
-            }
+            echo json_encode(['success' => true, 'audio' => 'uploads/' . $filename, 'timestamp' => $timestamp, 'duration' => $durationStr]);
         } else {
-            move_uploaded_file($file['tmp_name'], $filepath);
+            echo json_encode(['success' => false, 'message' => '保存失败']);
         }
-
-        // 保存消息记录
-        $avatar = $_SESSION['avatar'] ?? '';
-        $line = "{$avatar}|{$username}|[语音消息: uploads/{$filename}]|{$timestamp}\n";
-        file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
-
-        echo json_encode(['success' => true, 'audio' => 'uploads/' . $filename, 'timestamp' => $timestamp]);
         break;
 
     default:
