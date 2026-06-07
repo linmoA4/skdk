@@ -550,6 +550,7 @@
         let recordingStartTime = 0;
         let recordingTimer = null;
         let currentPlayingAudio = null;
+        let isRecordingLocked = false;
 
         // 检查登录状态
         async function checkLogin() {
@@ -753,6 +754,8 @@
 
         // 录音功能
         async function startRecording() {
+            // 防止重复启动和锁定期间启动
+            if (isRecording || isRecordingLocked) return;
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
@@ -792,6 +795,12 @@
                 document.getElementById('recordingTime').textContent = '0:00';
 
                 mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+                // 锁定500ms防止重复触发
+                isRecordingLocked = true;
+                setTimeout(() => {
+                    isRecordingLocked = false;
+                }, 500);
             }
         }
 
