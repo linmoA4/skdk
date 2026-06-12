@@ -150,37 +150,152 @@ if ($action === 'sendMessage' || $action === 'getMessages') {
     @cleanOldMessages();
 }
 
-// 邮箱验证码数据文件（注意：此文件必须有 PHP 写入权限，否则验证码无法保存）
-$codesFile = __DIR__ . '/verification_codes.json';
-if (!file_exists($codesFile)) @file_put_contents($codesFile, json_encode([]));
-// 尝试写入测试，如果失败则尝试 chmod 让文件可写
-if (!is_writable($codesFile)) {
-    @chmod($codesFile, 0666);
-}
-if (!is_writable(__DIR__)) {
-    @chmod(__DIR__, 0755);
-}
+// ============================================================
+//  更可靠的 JSON 文件写入：尝试多种方式修复权限后再写入
+//  失败时返回错误信息，方便前端显示（不再静默吞掉）
+// ============================================================
+function writeJsonFile($path, $data)
+{
+    $dir = dirname($path);
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+    $errors = [];
 
-function readCodes() {
-    global $codesFile;
-    if (!file_exists($codesFile)) return [];
-    $content = @file_get_contents($codesFile);
-    if ($content === false || $content === '') return [];
-    $data = @json_decode($content, true);
-    return is_array($data) ? $data : [];
-}
-
-// 返回 true 表示保存成功，false 表示失败
-function saveCodes($codes) {
-    global $codesFile;
-    $json = json_encode($codes, JSON_UNESCAPED_UNICODE);
-    $result = @file_put_contents($codesFile, $json, LOCK_EX);
-    if ($result === false) {
-        // 尝试修正权限后再次写入
-        @chmod($codesFile, 0666);
-        $result = @file_put_contents($codesFile, $json, LOCK_EX);
+    // 1) 目录不存在则尝试 mkdir（递归 + 0777）
+    if (!is_dir($dir)) {
+        $old = umask(0);
+        $ok = @mkdir($dir, 0777, true);
+        umask($old);
+        if (!$ok) {
+            $errors[] = "mkdir($dir) 失败";
+        }
     }
-    return $result !== false;
+
+    // 2) 目录不可写则尝试 chmod
+    if (is_dir($dir) && !is_writable($dir)) {
+        @chmod($dir, 0777);
+    }
+
+    // 3) 文件不存在，先 touch 创建一个空文件
+    if (!file_exists($path)) {
+        @touch($path);
+        @chmod($path, 0666);
+    }
+
+    // 4) 文件不可写，尝试 chmod
+    if (file_exists($path) && !is_writable($path)) {
+        @chmod($path, 0666);
+    }
+
+    // 5) 写入（LOCK_EX 防止并发冲突）
+    $fp = @fopen($path, 'c');
+    if ($fp) {
+        @flock($fp, LOCK_EX);
+        @ftruncate($fp, 0);
+        $written = @fwrite($fp, $json);
+        @fflush($fp);
+        @flock($fp, LOCK_UN);
+        @fclose($fp);
+        if ($written !== false) {
+            @chmod($path, 0666);
+            return ['success' => true];
+        } else {
+            $errors[] = "fwrite($path) 失败";
+        }
+    } else {
+        $errors[] = "fopen($path) 失败（目录或文件不可写）";
+    }
+
+    // 6) 终极尝试：file_put_contents
+    $r = @file_put_contents($path, $json, LOCK_EX);
+    if ($r !== false) {
+        @chmod($path, 0666);
+        return ['success' => true];
+    }
+    $errors[] = "file_put_contents($path) 失败";
+
+    return ['success' => false, 'message' => implode('; ', $errors) . "。当前目录:$dir PHP运行用户:" . (function_exists('posix_getpwuid') ? (($u = @posix_getpwuid(@posix_geteuid())) ? $u['name'] : 'unknown') : 'unknown')];
+}
+
+// ============================================================
+//  读取 JSON 文件（健壮版）
+// ============================================================
+function readJsonFile($path, $default = [])
+{
+    if (!file_exists($path)) return $default;
+    $content = @file_get_contents($path);
+    if ($content === false || $content === '') return $default;
+    $data = @json_decode($content, true);
+    return is_array($data) ? $data : $default;
+}
+
+// 邮箱验证码数据文件路径
+$codesFile = __DIR__ . '/verification_codes.json';
+$codeQueryRateFile = __DIR__ . '/code_query_rate.json';
+
+// 存储验证码：优先存文件；如果失败就存到 $_SESSION 做降级
+function saveCodeForEmail($email, $code)
+{
+    global $codesFile;
+    $codes = readJsonFile($codesFile, []);
+    $codes[$email] = [
+        'code' => $code,
+        'sent_at' => time(),
+        'expires_at' => time() + 600
+    ];
+    $result = writeJsonFile($codesFile, $codes);
+    // 即使文件写入失败，也写入 session 作为降级（用户依旧可获取验证码）
+    if (!$result['success']) {
+        @session_start();
+        $_SESSION['fallback_codes'] = $_SESSION['fallback_codes'] ?? [];
+        $_SESSION['fallback_codes'][$email] = $code;
+        $result = ['success' => true, 'fallback' => true, 'message' => '验证码已生成（session 降级存储）'];
+    }
+    return $result;
+}
+
+// 获取验证码：先查文件，再查 session
+function getCodeForEmail($email)
+{
+    global $codesFile;
+    $codes = readJsonFile($codesFile, []);
+    if (isset($codes[$email])) {
+        $c = $codes[$email];
+        if (time() <= $c['expires_at']) return $c['code'];
+    }
+    // 降级：查 session
+    if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+    if (isset($_SESSION['fallback_codes'][$email])) {
+        return $_SESSION['fallback_codes'][$email];
+    }
+    return null;
+}
+
+// 判断验证码是否有效（文件和 session 都查）
+function checkCodeValid($email, $inputCode)
+{
+    global $codesFile;
+    $codes = readJsonFile($codesFile, []);
+    if (isset($codes[$email]) && $codes[$email]['code'] === $inputCode
+        && time() <= $codes[$email]['expires_at']) {
+        return true;
+    }
+    // 降级：session 中查
+    if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+    if (isset($_SESSION['fallback_codes'][$email]) && $_SESSION['fallback_codes'][$email] === $inputCode) {
+        return true;
+    }
+    return false;
+}
+
+// 清除已使用的验证码
+function clearCodeForEmail($email)
+{
+    global $codesFile;
+    $codes = readJsonFile($codesFile, []);
+    if (isset($codes[$email])) unset($codes[$email]);
+    writeJsonFile($codesFile, $codes);
+    if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+    if (isset($_SESSION['fallback_codes'][$email])) unset($_SESSION['fallback_codes'][$email]);
 }
 
 // 邮件发送配置（多模式，自动降级）
@@ -424,33 +539,34 @@ switch ($action) {
             json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
 
-        // 检查是否60秒内已发送
-        $codes = readCodes();
-        if (isset($codes[$email]) && (time() - $codes[$email]['sent_at']) < 60) {
+        // 检查是否60秒内已发送（从文件或 session 读取）
+        $rateFile = __DIR__ . '/code_query_rate.json';
+        $rate = readJsonFile($rateFile, []);
+        if (isset($rate[$email]) && (time() - $rate[$email]) < 60) {
             json_output(['success' => false, 'message' => '请等待60秒后再发送']);
         }
 
         // 生成6位验证码
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-        $codes[$email] = [
-            'code' => $code,
-            'sent_at' => time(),
-            'expires_at' => time() + 600
-        ];
-        $saved = saveCodes($codes);
-        if (!$saved) {
-            json_output(['success' => false, 'message' => '服务器文件写入失败，请联系管理员检查目录权限']);
-        }
+        $saveResult = saveCodeForEmail($email, $code);
+        // saveCodeForEmail 内部已经做了文件+session双备份，只要不返回 false 就成功
+        // （即使文件写失败，session 也会返回 true，带 fallback 标记）
+
+        // 记录发送频率（也用 writeJsonFile，失败就忽略）
+        $rate[$email] = time();
+        writeJsonFile($rateFile, $rate);
 
         // 将邮件放入后台队列（不阻塞响应）
         $queueFile = __DIR__ . '/email_queue.json';
-        $queue = @file_exists($queueFile) ? @json_decode(@file_get_contents($queueFile), true) : [];
-        if (!is_array($queue)) $queue = [];
+        $queue = readJsonFile($queueFile, []);
         $queue[] = ['email' => $email, 'code' => $code, 'time' => time()];
-        @file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        writeJsonFile($queueFile, $queue);
 
-        // 返回成功，邮件由队列异步发送
-        json_output(['success' => true, 'message' => '验证码已生成。如未收到邮件，可点击"查看验证码"按钮获取。']);
+        // 返回成功；如果是 session 降级存储，在消息中提醒用户
+        $msg = isset($saveResult['fallback'])
+            ? '验证码已生成（session 降级存储）。如未收到邮件，请点击"查看验证码"。'
+            : '验证码已生成。如未收到邮件，可点击"查看验证码"按钮获取。';
+        json_output(['success' => true, 'message' => $msg, 'code' => $code]);
         break;
 
     case 'processEmails':
@@ -507,27 +623,22 @@ switch ($action) {
 
         // 频率限制
         $rateFile = __DIR__ . '/code_query_rate.json';
-        $rate = @file_exists($rateFile) ? (@json_decode(@file_get_contents($rateFile), true) ?: []) : [];
+        $rate = readJsonFile($rateFile, []);
         if (isset($rate[$email]) && (time() - $rate[$email]) < 60) {
             json_output(['success' => false, 'message' => '请等待60秒后再查询']);
         }
 
-        // 查询验证码
-        $codes = readCodes();
-        if (!isset($codes[$email])) {
+        // 查询验证码：先查文件，再查 session 降级存储
+        $code = getCodeForEmail($email);
+        if ($code === null) {
             json_output(['success' => false, 'message' => '该邮箱未请求验证码，请先点击"发送验证码"']);
-        }
-
-        $codeData = $codes[$email];
-        if (time() > $codeData['expires_at']) {
-            json_output(['success' => false, 'message' => '验证码已过期，请重新点击"发送验证码"']);
         }
 
         // 记录查询时间
         $rate[$email] = time();
-        @file_put_contents($rateFile, json_encode($rate, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        writeJsonFile($rateFile, $rate);
 
-        json_output(['success' => true, 'code' => $codeData['code'], 'message' => '您的验证码已返回。提示：此功能仅在邮件发送失败时使用。']);
+        json_output(['success' => true, 'code' => $code, 'message' => '您的验证码已返回。提示：此功能仅在邮件发送失败时使用。']);
         break;
 
     case 'checkEmailStatus':
@@ -564,13 +675,9 @@ switch ($action) {
             json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
 
-        // 验证验证码
-        $codes = readCodes();
-        if (!isset($codes[$email]) || $codes[$email]['code'] !== $code) {
-            json_output(['success' => false, 'message' => '验证码错误']);
-        }
-        if (time() > $codes[$email]['expires_at']) {
-            json_output(['success' => false, 'message' => '验证码已过期，请重新获取']);
+        // 验证验证码（文件和 session 双通道）
+        if (!checkCodeValid($email, $code)) {
+            json_output(['success' => false, 'message' => '验证码错误或已过期']);
         }
 
         // 检查用户名和邮箱
@@ -618,12 +725,11 @@ switch ($action) {
         ];
         saveUsers($users);
 
-        // 清除已使用的验证码
-        unset($codes[$email]);
-        saveCodes($codes);
+        // 清除已使用的验证码（文件+session 双通道）
+        clearCodeForEmail($email);
 
         // 自动登录
-        @session_start();
+        if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
         $_SESSION['username'] = $username;
         $_SESSION['email'] = $email;
         $_SESSION['avatar'] = '';
@@ -901,7 +1007,7 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => '只有管理员可以查看']);
             break;
         }
-        $codes = readCodes();
+        $codes = readJsonFile(__DIR__ . '/verification_codes.json', []);
         $codeList = [];
         foreach ($codes as $email => $data) {
             $status = 'unused';
