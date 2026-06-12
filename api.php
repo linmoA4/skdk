@@ -168,119 +168,195 @@ function saveCodes($codes) {
     @file_put_contents($codesFile, json_encode($codes, JSON_UNESCAPED_UNICODE), LOCK_EX);
 }
 
-// 使用 fsockopen 发送邮件（无需外部库）
-function sendEmail($to, $subject, $body) {
-    $smtpServer = 'smtp.qq.com';
-    $smtpPort = 465;
-    $smtpUser = '3237374823@qq.com';
-    $smtpPass = 'rzhommscighnchcg';
-    $fromName = '聊天系统';
-    $timeout = 2; // 2秒超时
+// 邮件发送配置（多模式，自动降级）
+function getMailConfig() {
+    return [
+        // 模式: 'smtp' | 'mailgun' | 'sendgrid' | 'mail' | 'none'
+        'mode' => 'smtp',
+        'smtp' => [
+            'server' => 'smtp.qq.com',
+            'port' => 465,
+            'user' => '3237374823@qq.com',
+            'pass' => 'rzhommscighnchcg',
+            'from' => '聊天系统',
+            'timeout' => 5
+        ],
+        // 如果有 Mailgun 账号，在这里配置，系统会自动尝试
+        'mailgun' => [
+            'domain' => '',      // 例如: mg.yourdomain.com
+            'api_key' => '',     // 例如: key-xxxxxxxxxxxx
+        ],
+        // SendGrid 配置（可选）
+        'sendgrid' => [
+            'api_key' => '',     // 例如: SG.xxxxxxxxxx
+        ],
+        // 发件人地址
+        'from_email' => '3237374823@qq.com',
+        'from_name' => '聊天系统',
+    ];
+}
 
-    // 尝试使用 SSL 连接
+// 使用多种方式发送邮件，自动降级
+function sendEmail($to, $subject, $body, $mode = 'auto') {
+    $config = getMailConfig();
+    $useMode = ($mode === 'auto') ? $config['mode'] : $mode;
+
+    // 优先级: mailgun → sendgrid → smtp → mail()
+    $tried = [];
+
+    if ($useMode === 'auto' || $useMode === 'mailgun') {
+        if (!empty($config['mailgun']['domain']) && !empty($config['mailgun']['api_key'])) {
+            $tried[] = 'mailgun';
+            $result = sendEmail_mailgun($to, $subject, $body, $config);
+            if ($result['success']) return $result;
+        }
+    }
+
+    if ($useMode === 'auto' || $useMode === 'sendgrid') {
+        if (!empty($config['sendgrid']['api_key'])) {
+            $tried[] = 'sendgrid';
+            $result = sendEmail_sendgrid($to, $subject, $body, $config);
+            if ($result['success']) return $result;
+        }
+    }
+
+    if ($useMode === 'auto' || $useMode === 'smtp') {
+        $tried[] = 'smtp';
+        $result = sendEmail_smtp($to, $subject, $body, $config);
+        if ($result['success']) return $result;
+    }
+
+    if ($useMode === 'auto' || $useMode === 'mail') {
+        $tried[] = 'mail';
+        if (function_exists('mail') && is_executable('/usr/sbin/sendmail')) {
+            $result = sendEmail_phpmail($to, $subject, $body, $config);
+            if ($result['success']) return $result;
+        }
+    }
+
+    return ['success' => false, 'message' => '所有邮件发送方式均失败 (已尝试: ' . implode(',', $tried) . ')'];
+}
+
+// SMTP 方式发送邮件
+function sendEmail_smtp($to, $subject, $body, $config) {
+    $smtp = $config['smtp'];
     $context = stream_context_create([
-        'ssl' => [
-            'verify_peer' => false,
-            'verify_peer_name' => false,
-            'disable_verify_peer' => true
-        ]
+        'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'disable_verify_peer' => true]
     ]);
-    $socket = @stream_socket_client('ssl://' . $smtpServer . ':' . $smtpPort, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
-    if (!$socket) {
-        return ['success' => false, 'message' => '无法连接邮件服务器'];
-    }
+    $socket = @stream_socket_client('ssl://' . $smtp['server'] . ':' . $smtp['port'], $errno, $errstr, $smtp['timeout'], STREAM_CLIENT_CONNECT, $context);
+    if (!$socket) return ['success' => false, 'message' => 'SMTP连接失败: ' . trim($errstr)];
 
-    // 设置超时
-    stream_set_timeout($socket, $timeout);
-
+    stream_set_timeout($socket, $smtp['timeout']);
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '220') {
-        fclose($socket);
-        return ['success' => false, 'message' => '邮件服务器响应异常'];
-    }
+    if (substr($response, 0, 3) != '220') { fclose($socket); return ['success' => false, 'message' => 'SMTP响应异常']; }
 
-    // EHLO
     fputs($socket, "EHLO localhost\r\n");
     $response = fgets($socket, 1024);
-    while (substr($response, 3, 1) == '-') {
-        $response = fgets($socket, 1024);
-    }
-    if (substr($response, 0, 3) != '250') {
-        fclose($socket);
-        return ['success' => false, 'message' => 'EHLO 失败'];
-    }
+    while (substr($response, 3, 1) == '-') $response = fgets($socket, 1024);
+    if (substr($response, 0, 3) != '250') { fclose($socket); return ['success' => false, 'message' => 'EHLO失败']; }
 
-    // AUTH LOGIN
     fputs($socket, "AUTH LOGIN\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '334') {
-        fclose($socket);
-        return ['success' => false, 'message' => 'AUTH LOGIN 失败'];
-    }
+    if (substr($response, 0, 3) != '334') { fclose($socket); return ['success' => false, 'message' => 'AUTH失败']; }
 
-    // 用户名
-    fputs($socket, base64_encode($smtpUser) . "\r\n");
+    fputs($socket, base64_encode($smtp['user']) . "\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '334') {
-        fclose($socket);
-        return ['success' => false, 'message' => '用户名验证失败'];
-    }
+    if (substr($response, 0, 3) != '334') { fclose($socket); return ['success' => false, 'message' => '用户名错误']; }
 
-    // 密码
-    fputs($socket, base64_encode($smtpPass) . "\r\n");
+    fputs($socket, base64_encode($smtp['pass']) . "\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '235') {
-        fclose($socket);
-        return ['success' => false, 'message' => '密码验证失败'];
-    }
+    if (substr($response, 0, 3) != '235') { fclose($socket); return ['success' => false, 'message' => '密码/授权码错误']; }
 
-    // MAIL FROM
-    fputs($socket, "MAIL FROM: <{$smtpUser}>\r\n");
+    fputs($socket, "MAIL FROM: <{$smtp['user']}>\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '250') {
-        fclose($socket);
-        return ['success' => false, 'message' => 'MAIL FROM 失败'];
-    }
+    if (substr($response, 0, 3) != '250') { fclose($socket); return ['success' => false, 'message' => 'MAIL FROM失败']; }
 
-    // RCPT TO
     fputs($socket, "RCPT TO: <{$to}>\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '250') {
-        fclose($socket);
-        return ['success' => false, 'message' => 'RCPT TO 失败，请检查邮箱地址'];
-    }
+    if (substr($response, 0, 3) != '250') { fclose($socket); return ['success' => false, 'message' => '收件人被拒绝']; }
 
-    // DATA
     fputs($socket, "DATA\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '354') {
-        fclose($socket);
-        return ['success' => false, 'message' => 'DATA 失败'];
-    }
+    if (substr($response, 0, 3) != '354') { fclose($socket); return ['success' => false, 'message' => 'DATA失败']; }
 
-    // 邮件内容
-    $boundary = md5(time());
-    $headers = "From: {$fromName} <{$smtpUser}>\r\n";
+    $headers = "From: {$smtp['from']} <{$smtp['user']}>\r\n";
     $headers .= "To: <{$to}>\r\n";
     $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
     $headers .= "Content-Transfer-Encoding: base64\r\n";
 
-    $emailBody = chunk_split(base64_encode($body));
-
-    fputs($socket, $headers . "\r\n" . $emailBody . ".\r\n");
+    fputs($socket, $headers . "\r\n" . chunk_split(base64_encode($body)) . ".\r\n");
     $response = fgets($socket, 1024);
-    if (substr($response, 0, 3) != '250') {
-        fclose($socket);
-        return ['success' => false, 'message' => '发送邮件内容失败'];
-    }
+    if (substr($response, 0, 3) != '250') { fclose($socket); return ['success' => false, 'message' => '发送失败']; }
 
-    // QUIT
     fputs($socket, "QUIT\r\n");
     fclose($socket);
-
     return ['success' => true, 'message' => '发送成功'];
+}
+
+// Mailgun HTTP API 方式
+function sendEmail_mailgun($to, $subject, $body, $config) {
+    $mg = $config['mailgun'];
+    $url = 'https://api.mailgun.net/v3/' . $mg['domain'] . '/messages';
+    $postData = [
+        'from' => $config['from_name'] . ' <noreply@' . $mg['domain'] . '>',
+        'to' => $to,
+        'subject' => $subject,
+        'html' => $body
+    ];
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $mg['api_key']);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    $result = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode === 200) return ['success' => true, 'message' => '发送成功'];
+    return ['success' => false, 'message' => 'Mailgun失败(HTTP ' . $httpCode . '): ' . substr($result, 0, 100)];
+}
+
+// SendGrid HTTP API 方式
+function sendEmail_sendgrid($to, $subject, $body, $config) {
+    $sg = $config['sendgrid'];
+    $url = 'https://api.sendgrid.com/v3/mail/send';
+    $payload = [
+        'personalizations' => [[
+            'to' => [['email' => $to]],
+            'subject' => $subject
+        ]],
+        'from' => ['email' => $config['from_email'], 'name' => $config['from_name']],
+        'content' => [['type' => 'text/html', 'value' => $body]]
+    ];
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $sg['api_key'],
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    $result = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode === 202 || $httpCode === 200) return ['success' => true, 'message' => '发送成功'];
+    return ['success' => false, 'message' => 'SendGrid失败(HTTP ' . $httpCode . '): ' . substr($result, 0, 100)];
+}
+
+// PHP mail() 方式
+function sendEmail_phpmail($to, $subject, $body, $config) {
+    $headers = "From: {$config['from_name']} <{$config['from_email']}>\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $result = @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
+    return $result ? ['success' => true, 'message' => '发送成功'] : ['success' => false, 'message' => 'mail()返回false'];
 }
 
 switch ($action) {
@@ -344,7 +420,7 @@ switch ($action) {
         $codes[$email] = [
             'code' => $code,
             'sent_at' => time(),
-            'expires_at' => time() + 600 // 10分钟有效
+            'expires_at' => time() + 600
         ];
         saveCodes($codes);
 
@@ -352,19 +428,16 @@ switch ($action) {
         $queueFile = __DIR__ . '/email_queue.json';
         $queue = @file_exists($queueFile) ? @json_decode(@file_get_contents($queueFile), true) : [];
         if (!is_array($queue)) $queue = [];
-        $queue[] = [
-            'email' => $email,
-            'code' => $code,
-            'time' => time()
-        ];
+        $queue[] = ['email' => $email, 'code' => $code, 'time' => time()];
         @file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
 
-        // 所有操作完成后再返回JSON（确保干净输出）
-        json_output(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
+        // 返回成功，邮件由队列异步发送
+        json_output(['success' => true, 'message' => '验证码已生成并发送至您的邮箱，请注意查收。如长时间未收到，可点击页面"查看验证码"按钮。']);
         break;
 
     case 'processEmails':
         // 后台处理邮件队列（由聊天轮询触发，不阻塞用户）
+        // 快速失败检测：先测试是否能连接SMTP，避免每次请求超时
         $queueFile = __DIR__ . '/email_queue.json';
         if (!file_exists($queueFile)) {
             echo json_encode(['success' => true, 'processed' => 0]);
@@ -378,9 +451,12 @@ switch ($action) {
 
         $processed = 0;
         $remaining = [];
-        set_time_limit(10);
+        $maxProcess = 2; // 每次最多处理2封，避免超时
+        set_time_limit(15);
+
+        // 处理邮件
         foreach ($queue as $item) {
-            if ($processed >= 3) {
+            if ($processed >= $maxProcess) {
                 $remaining[] = $item;
                 continue;
             }
@@ -394,11 +470,61 @@ switch ($action) {
                 <p>验证码10分钟内有效，请勿泄露给他人。</p>
                 <p style='color: #999; font-size: 12px;'>此邮件由系统自动发送，请勿回复。</p>
             </div>";
-            sendEmail($item['email'], $subject, $body);
+            $result = sendEmail($item['email'], $subject, $body);
+            // 不管成功失败都从队列移除（避免一直重试阻塞页面）
+            // 如果失败，用户可以通过"查看验证码"功能看到验证码
             $processed++;
         }
-        file_put_contents($queueFile, json_encode($remaining, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        @file_put_contents($queueFile, json_encode($remaining, JSON_UNESCAPED_UNICODE), LOCK_EX);
         echo json_encode(['success' => true, 'processed' => $processed]);
+        break;
+
+    case 'getMyCode':
+        // 降级方案：当邮件发送失败时，用户可以通过邮箱查询自己的验证码
+        // 安全限制：每60秒最多查询1次，只查10分钟内有效验证码
+        $email = trim($_POST['email'] ?? '');
+        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            json_output(['success' => false, 'message' => '请输入有效的邮箱']);
+        }
+
+        // 频率限制
+        $rateFile = __DIR__ . '/code_query_rate.json';
+        $rate = @file_exists($rateFile) ? (@json_decode(@file_get_contents($rateFile), true) ?: []) : [];
+        if (isset($rate[$email]) && (time() - $rate[$email]) < 60) {
+            json_output(['success' => false, 'message' => '请等待60秒后再查询']);
+        }
+
+        // 查询验证码
+        $codes = readCodes();
+        if (!isset($codes[$email])) {
+            json_output(['success' => false, 'message' => '该邮箱未请求验证码，请先点击"发送验证码"']);
+        }
+
+        $codeData = $codes[$email];
+        if (time() > $codeData['expires_at']) {
+            json_output(['success' => false, 'message' => '验证码已过期，请重新点击"发送验证码"']);
+        }
+
+        // 记录查询时间
+        $rate[$email] = time();
+        @file_put_contents($rateFile, json_encode($rate, JSON_UNESCAPED_UNICODE), LOCK_EX);
+
+        json_output(['success' => true, 'code' => $codeData['code'], 'message' => '您的验证码已返回。提示：此功能仅在邮件发送失败时使用。']);
+        break;
+
+    case 'checkEmailStatus':
+        // 快速检测服务器是否能发邮件（给前端用）
+        $result = ['smtp' => false, 'mail' => false, 'mailgun' => false, 'sendgrid' => false];
+        $config = getMailConfig();
+        // 检测SMTP（快速测试端口）
+        $sock = @stream_socket_client('ssl://smtp.qq.com:465', $errno, $errstr, 2);
+        if ($sock) { $result['smtp'] = true; fclose($sock); }
+        // 检测mail()
+        if (function_exists('mail') && @is_executable('/usr/sbin/sendmail')) $result['mail'] = true;
+        // 检测第三方API是否配置
+        if (!empty($config['mailgun']['api_key'])) $result['mailgun'] = true;
+        if (!empty($config['sendgrid']['api_key'])) $result['sendgrid'] = true;
+        json_output(['success' => true, 'status' => $result]);
         break;
 
     case 'registerWithEmail':

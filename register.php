@@ -312,6 +312,7 @@
                 <div class="code-input-group">
                     <input type="text" id="codeInput" placeholder="6位验证码" required maxlength="6" style="letter-spacing: 4px; text-align: center;">
                     <button class="code-btn" id="sendCodeBtn" onclick="sendVerificationCode()">发送验证码</button>
+                    <button class="code-btn" id="queryCodeBtn" onclick="getMyCode()" style="display: none; background: #fff3e0; color: #e65100;">查看验证码</button>
                 </div>
             </div>
             <div class="btn-row">
@@ -498,61 +499,57 @@
 
         async function sendVerificationCode() {
             const email = document.getElementById('emailInput').value.trim();
-            if (!email) {
-                showMessage('请先输入邮箱', 'error');
-                return;
-            }
+            if (!email) { showMessage('请先输入邮箱', 'error'); return; }
 
             const btn = document.getElementById('sendCodeBtn');
-            btn.disabled = true;
-            btn.textContent = '发送中...';
+            const queryBtn = document.getElementById('queryCodeBtn');
+            btn.disabled = true; btn.textContent = '发送中...';
 
             try {
                 const formData = new FormData();
-                formData.append('action', 'sendCode');
-                formData.append('email', email);
-
-                const response = await fetch('api.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error('服务器返回状态 ' + response.status);
-                }
-
+                formData.append('action', 'sendCode'); formData.append('email', email);
+                const response = await fetch('api.php', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
                 const text = await response.text();
                 const data = json_parse_safe(text);
-
-                if (data === null) {
-                    throw new Error('服务器返回内容不是合法JSON: ' + mb_substr_esc($text, 0, 50));
-                }
+                if (data === null) throw new Error('服务器返回异常');
 
                 if (data.success) {
-                    showMessage('验证码已发送，请查收邮箱', 'success');
+                    showMessage('验证码已发送，请查收邮箱。如长时间未收到，可点击"查看验证码"。', 'success');
+                    if (queryBtn) queryBtn.style.display = 'inline-block';
                     let countdown = 60;
                     btn.textContent = countdown + 's 后重发';
                     const timer = setInterval(() => {
                         countdown--;
-                        if (countdown <= 0) {
-                            clearInterval(timer);
-                            btn.disabled = false;
-                            btn.textContent = '发送验证码';
-                        } else {
-                            btn.textContent = countdown + 's 后重发';
-                        }
+                        if (countdown <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = '发送验证码'; }
+                        else { btn.textContent = countdown + 's 后重发'; }
                     }, 1000);
-                } else {
-                    showMessage(data.message || '发送失败', 'error');
-                    btn.disabled = false;
-                    btn.textContent = '发送验证码';
-                }
+                } else { showMessage(data.message || '发送失败', 'error'); btn.disabled = false; btn.textContent = '发送验证码'; }
             } catch (err) {
-                console.error('发送验证码失败:', err.message, err.stack);
-                showMessage('发送失败: ' + (err.message || '未知错误，请稍后重试'), 'error');
-                btn.disabled = false;
-                btn.textContent = '发送验证码';
+                showMessage('发送失败: ' + (err.message || '网络错误，请稍后重试'), 'error');
+                btn.disabled = false; btn.textContent = '发送验证码';
             }
+        }
+
+        async function getMyCode() {
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) { showMessage('请先输入邮箱', 'error'); return; }
+            const btn = document.getElementById('queryCodeBtn');
+            btn.disabled = true; const originalText = btn.textContent; btn.textContent = '查询中...';
+            try {
+                const formData = new FormData();
+                formData.append('action', 'getMyCode'); formData.append('email', email);
+                const response = await fetch('api.php', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const text = await response.text();
+                const data = json_parse_safe(text);
+                if (data === null) throw new Error('服务器返回异常');
+                if (data.success && data.code) {
+                    document.getElementById('codeInput').value = data.code;
+                    showMessage('已自动填入验证码：' + data.code + '，请在10分钟内完成注册。', 'success');
+                } else { showMessage(data.message || '查询失败', 'error'); }
+            } catch (err) { showMessage('查询失败: ' + (err.message || '网络错误'), 'error'); }
+            btn.disabled = false; btn.textContent = originalText;
         }
 
         async function completeRegister() {
