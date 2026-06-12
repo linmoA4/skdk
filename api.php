@@ -323,25 +323,57 @@ switch ($action) {
         ];
         saveCodes($codes);
 
-        // 发送邮件
-        $subject = '聊天系统 - 邮箱验证码';
-        $body = "<div style='font-family: Arial, sans-serif; padding: 20px;'>
-            <h2 style='color: #667eea;'>欢迎注册聊天系统</h2>
-            <p>您的验证码是：</p>
-            <div style='font-size: 32px; font-weight: bold; color: #333; padding: 15px; background: #f5f5f5; border-radius: 10px; letter-spacing: 8px; text-align: center; margin: 20px 0;'>
-                {$code}
-            </div>
-            <p>验证码10分钟内有效，请勿泄露给他人。</p>
-            <p style='color: #999; font-size: 12px;'>此邮件由系统自动发送，请勿回复。</p>
-        </div>";
+        // 验证码已保存，立刻返回！邮件放入队列，聊天轮询时自动发送
+        echo json_encode(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
 
-        $result = sendEmail($email, $subject, $body);
-        if ($result['success']) {
-            echo json_encode(['success' => true, 'message' => '验证码已发送']);
-        } else {
-            // 邮件发送失败，但为了方便测试，仍然把验证码存在，可以继续
-            echo json_encode(['success' => true, 'message' => '验证码已生成（测试用）: ' . $code]);
+        // 将邮件放入后台队列（不阻塞响应）
+        $queueFile = __DIR__ . '/email_queue.json';
+        $queue = file_exists($queueFile) ? json_decode(file_get_contents($queueFile), true) : [];
+        if (!is_array($queue)) $queue = [];
+        $queue[] = [
+            'email' => $email,
+            'code' => $code,
+            'time' => time()
+        ];
+        file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        break;
+
+    case 'processEmails':
+        // 后台处理邮件队列（由聊天轮询触发，不阻塞用户）
+        $queueFile = __DIR__ . '/email_queue.json';
+        if (!file_exists($queueFile)) {
+            echo json_encode(['success' => true, 'processed' => 0]);
+            break;
         }
+        $queue = json_decode(file_get_contents($queueFile), true) ?: [];
+        if (empty($queue)) {
+            echo json_encode(['success' => true, 'processed' => 0]);
+            break;
+        }
+
+        $processed = 0;
+        $remaining = [];
+        set_time_limit(10);
+        foreach ($queue as $item) {
+            if ($processed >= 3) {
+                $remaining[] = $item;
+                continue;
+            }
+            $subject = '聊天系统 - 邮箱验证码';
+            $body = "<div style='font-family: Arial, sans-serif; padding: 20px;'>
+                <h2 style='color: #667eea;'>欢迎注册聊天系统</h2>
+                <p>您的验证码是：</p>
+                <div style='font-size: 32px; font-weight: bold; color: #333; padding: 15px; background: #f5f5f5; border-radius: 10px; letter-spacing: 8px; text-align: center; margin: 20px 0;'>
+                    {$item['code']}
+                </div>
+                <p>验证码10分钟内有效，请勿泄露给他人。</p>
+                <p style='color: #999; font-size: 12px;'>此邮件由系统自动发送，请勿回复。</p>
+            </div>";
+            sendEmail($item['email'], $subject, $body);
+            $processed++;
+        }
+        file_put_contents($queueFile, json_encode($remaining, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        echo json_encode(['success' => true, 'processed' => $processed]);
         break;
 
     case 'registerWithEmail':

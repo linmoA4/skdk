@@ -1533,6 +1533,16 @@
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(loadMessages, 2000);
+            // 同时处理邮件队列（不阻塞）
+            processEmailQueue();
+            setInterval(processEmailQueue, 5000);
+        }
+
+        // 后台处理邮件队列
+        async function processEmailQueue() {
+            try {
+                await fetch('api.php?action=processEmails', { method: 'POST' });
+            } catch (err) {}
         }
 
         // 发送文字消息
