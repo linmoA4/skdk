@@ -1,14 +1,33 @@
 <?php
-error_reporting(0);
-ini_set('display_errors', '0');
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// 绝对禁止任何输出污染 JSON 响应
+if (function_exists('ob_start')) {
+    @ob_start();
+}
+@error_reporting(0);
+@ini_set('display_errors', '0');
+@ini_set('log_errors', '0');
+@header('Content-Type: application/json; charset=utf-8');
+@header('Access-Control-Allow-Origin: *');
+@header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+@header('Access-Control-Allow-Headers: Content-Type');
 
 // 处理 OPTIONS 预检请求
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    if (function_exists('ob_end_clean')) @ob_end_clean();
+    exit;
+}
+
+// 安全的 JSON 输出函数：确保只输出纯净 JSON
+function json_output($data) {
+    if (function_exists('ob_end_clean')) {
+        while (@ob_end_clean());
+    }
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    if (function_exists('ob_end_flush')) {
+        while (@ob_end_flush());
+    }
+    flush();
     exit;
 }
 
@@ -97,8 +116,9 @@ function cleanOldMessages() {
     $oneDayAgo = time() - 86400;
 
     // 清理旧消息
-    if (file_exists($messagesFile)) {
-        $lines = file($messagesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (@file_exists($messagesFile)) {
+        $lines = @file($messagesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines === false) return;
         $keepLines = [];
 
         foreach ($lines as $line) {
@@ -111,20 +131,24 @@ function cleanOldMessages() {
             }
         }
 
-        file_put_contents($messagesFile, implode("\n", $keepLines) . ($keepLines ? "\n" : ""));
+        @file_put_contents($messagesFile, implode("\n", $keepLines) . ($keepLines ? "\n" : ""), LOCK_EX);
     }
 
     // 清理旧音频
-    $audioFiles = glob($audiosDir . '*.mp3');
-    foreach ($audioFiles as $file) {
-        if (filemtime($file) < $oneDayAgo) {
-            unlink($file);
+    $audioFiles = @glob($audiosDir . '*.mp3');
+    if (is_array($audioFiles)) {
+        foreach ($audioFiles as $file) {
+            if (@filemtime($file) < $oneDayAgo) {
+                @unlink($file);
+            }
         }
     }
 }
 
-// 每次调用都检查清理
-cleanOldMessages();
+// 发送消息时触发清理（减少频繁调用）
+if ($action === 'sendMessage' || $action === 'getMessages') {
+    @cleanOldMessages();
+}
 
 // 邮箱验证码数据文件
 $codesFile = __DIR__ . '/verification_codes.json';
@@ -132,12 +156,16 @@ if (!file_exists($codesFile)) file_put_contents($codesFile, json_encode([]));
 
 function readCodes() {
     global $codesFile;
-    return json_decode(file_get_contents($codesFile), true) ?: [];
+    if (!file_exists($codesFile)) return [];
+    $content = @file_get_contents($codesFile);
+    if ($content === false) return [];
+    $data = @json_decode($content, true);
+    return is_array($data) ? $data : [];
 }
 
 function saveCodes($codes) {
     global $codesFile;
-    file_put_contents($codesFile, json_encode($codes, JSON_UNESCAPED_UNICODE));
+    @file_put_contents($codesFile, json_encode($codes, JSON_UNESCAPED_UNICODE), LOCK_EX);
 }
 
 // 使用 fsockopen 发送邮件（无需外部库）
@@ -259,12 +287,10 @@ switch ($action) {
     case 'checkUsername':
         $username = trim($_POST['username'] ?? '');
         if (empty($username) || strlen($username) < 2 || strlen($username) > 20) {
-            echo json_encode(['success' => false, 'message' => '用户名长度需2-20字符']);
-            break;
+            json_output(['success' => false, 'message' => '用户名长度需2-20字符']);
         }
         if (!preg_match('/^[\x{4e00}-\x{9fa5}a-zA-Z0-9_]+$/u', $username)) {
-            echo json_encode(['success' => false, 'message' => '用户名只能包含中文、英文、数字和下划线']);
-            break;
+            json_output(['success' => false, 'message' => '用户名只能包含中文、英文、数字和下划线']);
         }
         $users = readUsers();
         $exists = false;
@@ -275,17 +301,16 @@ switch ($action) {
             }
         }
         if ($exists) {
-            echo json_encode(['success' => false, 'message' => '用户名已存在']);
+            json_output(['success' => false, 'message' => '用户名已存在']);
         } else {
-            echo json_encode(['success' => true, 'message' => '用户名可用']);
+            json_output(['success' => true, 'message' => '用户名可用']);
         }
         break;
 
     case 'checkEmail':
         $email = trim($_POST['email'] ?? '');
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode(['success' => false, 'message' => '邮箱格式不正确']);
-            break;
+            json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
         $users = readUsers();
         $exists = false;
@@ -296,24 +321,22 @@ switch ($action) {
             }
         }
         if ($exists) {
-            echo json_encode(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
+            json_output(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
         } else {
-            echo json_encode(['success' => true, 'message' => '邮箱可用']);
+            json_output(['success' => true, 'message' => '邮箱可用']);
         }
         break;
 
     case 'sendCode':
         $email = trim($_POST['email'] ?? '');
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode(['success' => false, 'message' => '邮箱格式不正确']);
-            break;
+            json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
 
         // 检查是否60秒内已发送
         $codes = readCodes();
         if (isset($codes[$email]) && (time() - $codes[$email]['sent_at']) < 60) {
-            echo json_encode(['success' => false, 'message' => '请等待60秒后再发送']);
-            break;
+            json_output(['success' => false, 'message' => '请等待60秒后再发送']);
         }
 
         // 生成6位验证码
@@ -327,7 +350,7 @@ switch ($action) {
 
         // 将邮件放入后台队列（不阻塞响应）
         $queueFile = __DIR__ . '/email_queue.json';
-        $queue = file_exists($queueFile) ? json_decode(file_get_contents($queueFile), true) : [];
+        $queue = @file_exists($queueFile) ? @json_decode(@file_get_contents($queueFile), true) : [];
         if (!is_array($queue)) $queue = [];
         $queue[] = [
             'email' => $email,
@@ -336,8 +359,8 @@ switch ($action) {
         ];
         @file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
 
-        // 所有操作完成后再返回JSON
-        echo json_encode(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
+        // 所有操作完成后再返回JSON（确保干净输出）
+        json_output(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
         break;
 
     case 'processEmails':
@@ -385,31 +408,25 @@ switch ($action) {
         $code = trim($_POST['code'] ?? '');
 
         if (empty($username) || empty($email) || empty($password) || empty($code)) {
-            echo json_encode(['success' => false, 'message' => '请填写完整信息']);
-            break;
+            json_output(['success' => false, 'message' => '请填写完整信息']);
         }
         if (strlen($username) < 2 || strlen($username) > 20) {
-            echo json_encode(['success' => false, 'message' => '用户名长度需2-20字符']);
-            break;
+            json_output(['success' => false, 'message' => '用户名长度需2-20字符']);
         }
         if (!preg_match('/^[\x{4e00}-\x{9fa5}a-zA-Z0-9_]+$/u', $username)) {
-            echo json_encode(['success' => false, 'message' => '用户名只能包含中文、英文、数字和下划线']);
-            break;
+            json_output(['success' => false, 'message' => '用户名只能包含中文、英文、数字和下划线']);
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode(['success' => false, 'message' => '邮箱格式不正确']);
-            break;
+            json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
 
         // 验证验证码
         $codes = readCodes();
         if (!isset($codes[$email]) || $codes[$email]['code'] !== $code) {
-            echo json_encode(['success' => false, 'message' => '验证码错误']);
-            break;
+            json_output(['success' => false, 'message' => '验证码错误']);
         }
         if (time() > $codes[$email]['expires_at']) {
-            echo json_encode(['success' => false, 'message' => '验证码已过期，请重新获取']);
-            break;
+            json_output(['success' => false, 'message' => '验证码已过期，请重新获取']);
         }
 
         // 检查用户名和邮箱
@@ -425,12 +442,10 @@ switch ($action) {
             }
         }
         if ($usernameExists) {
-            echo json_encode(['success' => false, 'message' => '用户名已存在']);
-            break;
+            json_output(['success' => false, 'message' => '用户名已存在']);
         }
         if ($emailExists) {
-            echo json_encode(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
-            break;
+            json_output(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
         }
 
         // 处理头像上传
@@ -441,7 +456,7 @@ switch ($action) {
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])) {
                 $filename = $username . '_' . time() . '.' . $ext;
                 $filepath = $avatarsDir . $filename;
-                if (move_uploaded_file($file['tmp_name'], $filepath)) {
+                if (@move_uploaded_file($file['tmp_name'], $filepath)) {
                     $avatarPath = 'uploads/avatars/' . $filename;
                 }
             }
@@ -464,7 +479,7 @@ switch ($action) {
         saveCodes($codes);
 
         // 自动登录
-        session_start();
+        @session_start();
         $_SESSION['username'] = $username;
         $_SESSION['email'] = $email;
         $_SESSION['avatar'] = '';
@@ -472,18 +487,18 @@ switch ($action) {
 
         // 发送欢迎消息
         $botConfigFile = __DIR__ . '/机器人配置.json';
-        if (file_exists($botConfigFile)) {
-            $config = json_decode(file_get_contents($botConfigFile), true);
+        if (@file_exists($botConfigFile)) {
+            $config = @json_decode(@file_get_contents($botConfigFile), true);
             if (!empty($config['enabled']) && !empty($config['welcome'])) {
                 $botName = $config['name'] ?? '群聊机器人';
                 $welcome = str_replace('{username}', $username, $config['welcome']);
                 $messagesFile = __DIR__ . '/信息.txt';
                 $msgLine = '|' . $botName . '|' . $welcome . '|' . time() . "\n";
-                file_put_contents($messagesFile, $msgLine, FILE_APPEND);
+                @file_put_contents($messagesFile, $msgLine, FILE_APPEND);
             }
         }
 
-        echo json_encode(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
+        json_output(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
         break;
 
     case 'register':

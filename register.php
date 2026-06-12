@@ -326,6 +326,21 @@
     </div>
 
     <script>
+        // 工具函数：安全解析 JSON（如果失败返回 null，避免抛出）
+        function json_parse_safe(text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn('JSON 解析失败，原始内容:', text);
+                return null;
+            }
+        }
+        // 安全取子串（避免 undefined）
+        function mb_substr_esc(s, start, length) {
+            if (!s) return '';
+            return String(s).substring(start, length);
+        }
+
         let selectedAvatar = null;
         let currentStep = 1;
 
@@ -403,7 +418,10 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await response.json();
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const text = await response.text();
+                const data = json_parse_safe(text);
+                if (data === null) throw new Error('非合法JSON: ' + mb_substr_esc(text, 0, 60));
 
                 if (!data.success) {
                     showMessage(data.message, 'error');
@@ -455,7 +473,10 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await response.json();
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const text = await response.text();
+                const data = json_parse_safe(text);
+                if (data === null) throw new Error('非合法JSON: ' + mb_substr_esc(text, 0, 60));
 
                 if (!data.success) {
                     showMessage(data.message, 'error');
@@ -495,7 +516,17 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error('服务器返回状态 ' + response.status);
+                }
+
+                const text = await response.text();
+                const data = json_parse_safe(text);
+
+                if (data === null) {
+                    throw new Error('服务器返回内容不是合法JSON: ' + mb_substr_esc($text, 0, 50));
+                }
 
                 if (data.success) {
                     showMessage('验证码已发送，请查收邮箱', 'success');
@@ -512,13 +543,13 @@
                         }
                     }, 1000);
                 } else {
-                    showMessage(data.message, 'error');
+                    showMessage(data.message || '发送失败', 'error');
                     btn.disabled = false;
                     btn.textContent = '发送验证码';
                 }
             } catch (err) {
                 console.error('发送验证码失败:', err.message, err.stack);
-                showMessage('请求失败: ' + (err.message || '网络错误'), 'error');
+                showMessage('发送失败: ' + (err.message || '未知错误，请稍后重试'), 'error');
                 btn.disabled = false;
                 btn.textContent = '发送验证码';
             }
@@ -556,13 +587,12 @@
                 });
 
                 if (!response.ok) {
-                    showMessage('服务器响应异常: ' + response.status, 'error');
-                    btn.disabled = false;
-                    btn.textContent = '完成注册';
-                    return;
+                    throw new Error('HTTP ' + response.status);
                 }
 
-                const data = await response.json();
+                const text = await response.text();
+                const data = json_parse_safe(text);
+                if (data === null) throw new Error('非合法JSON: ' + mb_substr_esc(text, 0, 80));
 
                 if (data.success) {
                     showMessage('注册成功！即将进入聊天', 'success');
@@ -570,7 +600,7 @@
                         window.location.href = 'chat.php';
                     }, 1000);
                 } else {
-                    showMessage(data.message, 'error');
+                    showMessage(data.message || '注册失败', 'error');
                 }
             } catch (err) {
                 console.error('注册错误:', err.message);

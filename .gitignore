@@ -1,0 +1,23 @@
+# 运行时数据
+verification_codes.json
+email_queue.json
+信息.txt
+账号.txt
+管理员列表.txt
+群公告.json
+群文件.json
+群按钮.json
+机器人_last_reply.txt
+
+# 上传文件
+uploads/
+uploads/**/*
+
+# IDE / 系统
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# 测试脚本
+_test_*
