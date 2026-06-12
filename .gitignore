@@ -1,25 +1,42 @@
-# 运行时数据
-verification_codes.json
-email_queue.json
-code_query_rate.json
-信息.txt
-账号.txt
-管理员列表.txt
-群公告.json
-群文件.json
-群按钮.json
-机器人*.json
-机器人_last_reply.txt
+# 运行时数据文件（纯文件存储，不提交到仓库）
+data/*.json
+data/*.txt
+data/*.log
+data/*
+!data/.htaccess
 
 # 上传文件
-uploads/
-uploads/**/*
+uploads/*
+!uploads/.htaccess
 
-# IDE / 系统
-.DS_Store
-.idea/
-.vscode/
+# 系统日志
+logs/*
+logs/
 *.log
 
-# 测试脚本
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PHP 相关
+composer.phar
+/vendor/
+
+# 其他
 _test_*
+backup/
