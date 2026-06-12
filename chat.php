@@ -232,6 +232,102 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
+
+        /* 群公告样式 */
+        .message-announcement {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 15px;
+            max-width: 400px;
+        }
+        .ann-title {
+            font-weight: bold;
+            color: #e65100;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .ann-content {
+            color: #5d4037;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        /* 群文件卡片样式 */
+        .message-file-card {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            border: 2px solid #2196f3;
+            border-radius: 15px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            max-width: 400px;
+        }
+        .message-file-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(33, 150, 243, 0.3);
+        }
+        .file-card-icon {
+            font-size: 36px;
+            flex-shrink: 0;
+        }
+        .file-card-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .file-card-title {
+            font-weight: bold;
+            color: #1565c0;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+        .file-card-desc {
+            color: #546e7a;
+            font-size: 12px;
+        }
+        .file-card-arrow {
+            font-size: 20px;
+            color: #2196f3;
+        }
+
+        /* 按钮样式 */
+        .message-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .message-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        .btn-icon {
+            font-size: 18px;
+        }
+
+        /* 机器人消息特殊样式 */
+        .bot-message {
+            animation: botSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes botSlideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
         .message-audio {
             background: white;
             padding: 12px 18px;
@@ -1189,15 +1285,26 @@
         function addMessageToUI(msg) {
             const messagesDiv = document.getElementById('messages');
             const isSelf = msg.username === currentUser.username;
+            const isBot = msg.username === '群公告' || msg.username === '群文件' || msg.username === '群按钮';
 
             const messageDiv = document.createElement('div');
-            messageDiv.className = 'message' + (isSelf ? ' self' : '');
+            messageDiv.className = 'message' + (isSelf ? ' self' : '') + (isBot ? ' bot-message' : '');
             messageDiv.dataset.timestamp = msg.timestamp;
             messageDiv.dataset.username = msg.username;
 
-            const avatarHtml = msg.avatar
-                ? `<img src="${msg.avatar}" class="message-avatar">`
-                : `<div class="message-avatar-placeholder">${msg.username.charAt(0).toUpperCase()}</div>`;
+            // 机器人消息特殊头像
+            let avatarHtml;
+            if (msg.username === '群公告') {
+                avatarHtml = `<div class="message-avatar-placeholder" style="background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">📢</div>`;
+            } else if (msg.username === '群文件') {
+                avatarHtml = `<div class="message-avatar-placeholder" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);">📁</div>`;
+            } else if (msg.username === '群按钮') {
+                avatarHtml = `<div class="message-avatar-placeholder" style="background: linear-gradient(135deg, #667eea, #764ba2);">🔘</div>`;
+            } else {
+                avatarHtml = msg.avatar
+                    ? `<img src="${msg.avatar}" class="message-avatar">`
+                    : `<div class="message-avatar-placeholder">${msg.username.charAt(0).toUpperCase()}</div>`;
+            }
 
             const role = msg.role || 'member';
             let roleHtml = '';
@@ -1229,6 +1336,43 @@
                         </div>
                     `;
                 }
+            } else if (msg.message.includes('[下载链接:')) {
+                // 群文件消息
+                const linkMatch = msg.message.match(/\[下载链接: (.+)\]/);
+                const url = linkMatch ? linkMatch[1] : '#';
+                const text = msg.message.replace(/\[下载链接: .+\]/, '').trim();
+                contentHtml = `
+                    <div class="message-file-card" onclick="window.open('${url}', '_blank')">
+                        <div class="file-card-icon">📁</div>
+                        <div class="file-card-info">
+                            <div class="file-card-title">${escapeHtml(text.split('\n')[0].replace('📁 ', ''))}</div>
+                            <div class="file-card-desc">${escapeHtml(text.split('\n').slice(1).join(' '))}</div>
+                        </div>
+                        <div class="file-card-arrow">➜</div>
+                    </div>
+                `;
+            } else if (msg.message.includes('[按钮链接:')) {
+                // 按钮消息
+                const linkMatch = msg.message.match(/\[按钮链接: (.+)\]/);
+                const url = linkMatch ? linkMatch[1] : '#';
+                const name = msg.message.replace(/\[按钮链接: .+\]/, '').trim().replace('🔘 ', '').replace('【', '').replace('】', '');
+                contentHtml = `
+                    <a href="${url}" target="_blank" class="message-button">
+                        <span class="btn-icon">🔗</span>
+                        <span class="btn-text">${escapeHtml(name)}</span>
+                    </a>
+                `;
+            } else if (msg.username === '群公告') {
+                // 群公告消息
+                const lines = msg.message.split('\n');
+                const title = lines[0].replace('📢 ', '');
+                const content = lines.slice(1).join('\n');
+                contentHtml = `
+                    <div class="message-announcement">
+                        <div class="ann-title">${escapeHtml(title)}</div>
+                        <div class="ann-content">${escapeHtml(content)}</div>
+                    </div>
+                `;
             } else {
                 contentHtml = `<div class="message-text">${escapeHtml(msg.message)}</div>`;
             }
@@ -1245,7 +1389,7 @@
             `;
 
             // 长按撤回功能（仅自己的消息）
-            if (isSelf) {
+            if (isSelf && !isBot) {
                 setupLongPressRecall(messageDiv, msg.timestamp);
             }
 

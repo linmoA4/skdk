@@ -23,9 +23,15 @@ $uploadDir = __DIR__ . '/uploads/';
 $avatarsDir = $uploadDir . 'avatars/';
 $audiosDir = $uploadDir . 'audios/';
 $messagesFile = __DIR__ . '/信息.txt';
+$announcementsFile = __DIR__ . '/群公告.json';
+$groupFilesFile = __DIR__ . '/群文件.json';
+$buttonsFile = __DIR__ . '/群按钮.json';
 
 if (!file_exists($avatarsDir)) mkdir($avatarsDir, 0777, true);
 if (!file_exists($audiosDir)) mkdir($audiosDir, 0777, true);
+if (!file_exists($announcementsFile)) file_put_contents($announcementsFile, json_encode([]));
+if (!file_exists($groupFilesFile)) file_put_contents($groupFilesFile, json_encode([]));
+if (!file_exists($buttonsFile)) file_put_contents($buttonsFile, json_encode([]));
 
 // 确保用户数据文件存在（账号.txt 格式：邮箱/名称/密码，每个用户3行）
 $usersFile = __DIR__ . '/账号.txt';
@@ -1052,6 +1058,201 @@ switch ($action) {
         } else {
             echo json_encode(['success' => false, 'message' => '保存失败']);
         }
+        break;
+
+    // ===== 群公告功能 =====
+    case 'createAnnouncement':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+        $priority = $_POST['priority'] ?? 'normal';
+
+        if (empty($title) || empty($content)) {
+            echo json_encode(['success' => false, 'message' => '标题和内容不能为空']);
+            break;
+        }
+
+        $announcements = json_decode(file_get_contents($announcementsFile), true) ?: [];
+        $ann = [
+            'id' => time() . '_' . rand(1000, 9999),
+            'title' => $title,
+            'content' => $content,
+            'priority' => $priority,
+            'author' => $_SESSION['username'],
+            'created_at' => time()
+        ];
+        $announcements[] = $ann;
+        file_put_contents($announcementsFile, json_encode($announcements, JSON_UNESCAPED_UNICODE));
+
+        // 自动发送到聊天界面
+        $botName = '群公告';
+        $msgContent = "📢 【{$title}】\n{$content}";
+        $line = "|{$botName}|{$msgContent}|" . time() . "\n";
+        file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
+
+        echo json_encode(['success' => true, 'message' => '公告已发布并发送到聊天']);
+        break;
+
+    case 'getAnnouncements':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $announcements = json_decode(file_get_contents($announcementsFile), true) ?: [];
+        echo json_encode(['success' => true, 'announcements' => $announcements]);
+        break;
+
+    case 'deleteAnnouncement':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $id = $_POST['id'] ?? '';
+        $announcements = json_decode(file_get_contents($announcementsFile), true) ?: [];
+        $announcements = array_filter($announcements, function($a) use ($id) {
+            return $a['id'] !== $id;
+        });
+        file_put_contents($announcementsFile, json_encode(array_values($announcements), JSON_UNESCAPED_UNICODE));
+        echo json_encode(['success' => true, 'message' => '公告已删除']);
+        break;
+
+    // ===== 群文件功能（直链模式）=====
+    case 'createGroupFile':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+
+        $title = trim($_POST['title'] ?? '');
+        $downloadUrl = trim($_POST['downloadUrl'] ?? '');
+        $iconUrl = trim($_POST['iconUrl'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $fileSize = trim($_POST['fileSize'] ?? '');
+
+        if (empty($title) || empty($downloadUrl)) {
+            echo json_encode(['success' => false, 'message' => '标题和下载链接不能为空']);
+            break;
+        }
+
+        $files = json_decode(file_get_contents($groupFilesFile), true) ?: [];
+        $file = [
+            'id' => time() . '_' . rand(1000, 9999),
+            'title' => $title,
+            'downloadUrl' => $downloadUrl,
+            'iconUrl' => $iconUrl,
+            'description' => $description,
+            'fileSize' => $fileSize,
+            'uploader' => $_SESSION['username'],
+            'created_at' => time()
+        ];
+        $files[] = $file;
+        file_put_contents($groupFilesFile, json_encode($files, JSON_UNESCAPED_UNICODE));
+
+        // 自动发送到聊天
+        $botName = '群文件';
+        $msgContent = "📁 【{$title}】\n{$description}\n[下载链接: {$downloadUrl}]";
+        $line = "|{$botName}|{$msgContent}|" . time() . "\n";
+        file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
+
+        echo json_encode(['success' => true, 'message' => '文件已发布']);
+        break;
+
+    case 'getGroupFiles':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $files = json_decode(file_get_contents($groupFilesFile), true) ?: [];
+        echo json_encode(['success' => true, 'files' => $files]);
+        break;
+
+    case 'deleteGroupFile':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $id = $_POST['id'] ?? '';
+        $files = json_decode(file_get_contents($groupFilesFile), true) ?: [];
+        $files = array_filter($files, function($f) use ($id) {
+            return $f['id'] !== $id;
+        });
+        file_put_contents($groupFilesFile, json_encode(array_values($files), JSON_UNESCAPED_UNICODE));
+        echo json_encode(['success' => true, 'message' => '文件已删除']);
+        break;
+
+    // ===== 按钮功能 =====
+    case 'createButton':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+
+        $name = trim($_POST['name'] ?? '');
+        $link = trim($_POST['link'] ?? '');
+        $iconUrl = trim($_POST['iconUrl'] ?? '');
+        $color = trim($_POST['color'] ?? '#667eea');
+
+        if (empty($name) || empty($link)) {
+            echo json_encode(['success' => false, 'message' => '按钮名称和链接不能为空']);
+            break;
+        }
+
+        $buttons = json_decode(file_get_contents($buttonsFile), true) ?: [];
+        $btn = [
+            'id' => time() . '_' . rand(1000, 9999),
+            'name' => $name,
+            'link' => $link,
+            'iconUrl' => $iconUrl,
+            'color' => $color,
+            'creator' => $_SESSION['username'],
+            'created_at' => time()
+        ];
+        $buttons[] = $btn;
+        file_put_contents($buttonsFile, json_encode($buttons, JSON_UNESCAPED_UNICODE));
+
+        // 自动发送到聊天
+        $botName = '群按钮';
+        $msgContent = "🔘 【{$name}】\n[按钮链接: {$link}]";
+        $line = "|{$botName}|{$msgContent}|" . time() . "\n";
+        file_put_contents($messagesFile, $line, FILE_APPEND | LOCK_EX);
+
+        echo json_encode(['success' => true, 'message' => '按钮已创建']);
+        break;
+
+    case 'getButtons':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $buttons = json_decode(file_get_contents($buttonsFile), true) ?: [];
+        echo json_encode(['success' => true, 'buttons' => $buttons]);
+        break;
+
+    case 'deleteButton':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $id = $_POST['id'] ?? '';
+        $buttons = json_decode(file_get_contents($buttonsFile), true) ?: [];
+        $buttons = array_filter($buttons, function($b) use ($id) {
+            return $b['id'] !== $id;
+        });
+        file_put_contents($buttonsFile, json_encode(array_values($buttons), JSON_UNESCAPED_UNICODE));
+        echo json_encode(['success' => true, 'message' => '按钮已删除']);
         break;
 
     default:
