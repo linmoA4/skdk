@@ -443,7 +443,7 @@
         }
 
         async function goToStep3() {
-            const email = document.getElementById('emailInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim().toLowerCase();
             const password = document.getElementById('passwordInput').value;
             const confirmPassword = document.getElementById('confirmPasswordInput').value;
 
@@ -498,7 +498,7 @@
         }
 
         async function sendVerificationCode() {
-            const email = document.getElementById('emailInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim().toLowerCase();
             if (!email) { showMessage('请先输入邮箱', 'error'); return; }
 
             const btn = document.getElementById('sendCodeBtn');
@@ -532,7 +532,7 @@
         }
 
         async function getMyCode() {
-            const email = document.getElementById('emailInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim().toLowerCase();
             if (!email) { showMessage('请先输入邮箱', 'error'); return; }
             const btn = document.getElementById('queryCodeBtn');
             btn.disabled = true; const originalText = btn.textContent; btn.textContent = '查询中...';
@@ -560,7 +560,7 @@
             }
 
             const username = document.getElementById('usernameInput').value.trim();
-            const email = document.getElementById('emailInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim().toLowerCase();
             const password = document.getElementById('passwordInput').value;
 
             const btn = document.getElementById('step3Btn');

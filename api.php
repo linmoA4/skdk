@@ -150,22 +150,37 @@ if ($action === 'sendMessage' || $action === 'getMessages') {
     @cleanOldMessages();
 }
 
-// 邮箱验证码数据文件
+// 邮箱验证码数据文件（注意：此文件必须有 PHP 写入权限，否则验证码无法保存）
 $codesFile = __DIR__ . '/verification_codes.json';
-if (!file_exists($codesFile)) file_put_contents($codesFile, json_encode([]));
+if (!file_exists($codesFile)) @file_put_contents($codesFile, json_encode([]));
+// 尝试写入测试，如果失败则尝试 chmod 让文件可写
+if (!is_writable($codesFile)) {
+    @chmod($codesFile, 0666);
+}
+if (!is_writable(__DIR__)) {
+    @chmod(__DIR__, 0755);
+}
 
 function readCodes() {
     global $codesFile;
     if (!file_exists($codesFile)) return [];
     $content = @file_get_contents($codesFile);
-    if ($content === false) return [];
+    if ($content === false || $content === '') return [];
     $data = @json_decode($content, true);
     return is_array($data) ? $data : [];
 }
 
+// 返回 true 表示保存成功，false 表示失败
 function saveCodes($codes) {
     global $codesFile;
-    @file_put_contents($codesFile, json_encode($codes, JSON_UNESCAPED_UNICODE), LOCK_EX);
+    $json = json_encode($codes, JSON_UNESCAPED_UNICODE);
+    $result = @file_put_contents($codesFile, $json, LOCK_EX);
+    if ($result === false) {
+        // 尝试修正权限后再次写入
+        @chmod($codesFile, 0666);
+        $result = @file_put_contents($codesFile, $json, LOCK_EX);
+    }
+    return $result !== false;
 }
 
 // 邮件发送配置（多模式，自动降级）
@@ -404,7 +419,7 @@ switch ($action) {
         break;
 
     case 'sendCode':
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             json_output(['success' => false, 'message' => '邮箱格式不正确']);
         }
@@ -422,7 +437,10 @@ switch ($action) {
             'sent_at' => time(),
             'expires_at' => time() + 600
         ];
-        saveCodes($codes);
+        $saved = saveCodes($codes);
+        if (!$saved) {
+            json_output(['success' => false, 'message' => '服务器文件写入失败，请联系管理员检查目录权限']);
+        }
 
         // 将邮件放入后台队列（不阻塞响应）
         $queueFile = __DIR__ . '/email_queue.json';
@@ -432,7 +450,7 @@ switch ($action) {
         @file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
 
         // 返回成功，邮件由队列异步发送
-        json_output(['success' => true, 'message' => '验证码已生成并发送至您的邮箱，请注意查收。如长时间未收到，可点击页面"查看验证码"按钮。']);
+        json_output(['success' => true, 'message' => '验证码已生成。如未收到邮件，可点击"查看验证码"按钮获取。']);
         break;
 
     case 'processEmails':
@@ -482,7 +500,7 @@ switch ($action) {
     case 'getMyCode':
         // 降级方案：当邮件发送失败时，用户可以通过邮箱查询自己的验证码
         // 安全限制：每60秒最多查询1次，只查10分钟内有效验证码
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             json_output(['success' => false, 'message' => '请输入有效的邮箱']);
         }
@@ -529,7 +547,7 @@ switch ($action) {
 
     case 'registerWithEmail':
         $username = trim($_POST['username'] ?? '');
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
         $code = trim($_POST['code'] ?? '');
 

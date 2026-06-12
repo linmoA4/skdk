@@ -1,6 +1,7 @@
 # 运行时数据
 verification_codes.json
 email_queue.json
+code_query_rate.json
 信息.txt
 账号.txt
 管理员列表.txt
