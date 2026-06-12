@@ -411,7 +411,8 @@
                     setStep(2);
                 }
             } catch (err) {
-                showMessage('网络错误，请重试', 'error');
+                console.error('错误:', err.message);
+                showMessage('请求失败: ' + (err.message || '网络错误'), 'error');
             }
 
             btn.disabled = false;
@@ -462,7 +463,8 @@
                     setStep(3);
                 }
             } catch (err) {
-                showMessage('网络错误，请重试', 'error');
+                console.error('错误:', err.message);
+                showMessage('请求失败: ' + (err.message || '网络错误'), 'error');
             }
 
             btn.disabled = false;
@@ -515,8 +517,8 @@
                     btn.textContent = '发送验证码';
                 }
             } catch (err) {
-                console.error('发送验证码失败:', err);
-                showMessage('网络错误，请检查网络后重试', 'error');
+                console.error('发送验证码失败:', err.message, err.stack);
+                showMessage('请求失败: ' + (err.message || '网络错误'), 'error');
                 btn.disabled = false;
                 btn.textContent = '发送验证码';
             }
@@ -571,8 +573,8 @@
                     showMessage(data.message, 'error');
                 }
             } catch (err) {
-                console.error('注册错误:', err);
-                showMessage('网络错误，请检查网络连接或重试', 'error');
+                console.error('注册错误:', err.message);
+                showMessage('请求失败: ' + (err.message || '网络错误'), 'error');
             }
 
             btn.disabled = false;

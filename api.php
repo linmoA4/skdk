@@ -1,4 +1,6 @@
 <?php
+error_reporting(0);
+ini_set('display_errors', '0');
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -323,9 +325,6 @@ switch ($action) {
         ];
         saveCodes($codes);
 
-        // 验证码已保存，立刻返回！邮件放入队列，聊天轮询时自动发送
-        echo json_encode(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
-
         // 将邮件放入后台队列（不阻塞响应）
         $queueFile = __DIR__ . '/email_queue.json';
         $queue = file_exists($queueFile) ? json_decode(file_get_contents($queueFile), true) : [];
@@ -335,7 +334,10 @@ switch ($action) {
             'code' => $code,
             'time' => time()
         ];
-        file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        @file_put_contents($queueFile, json_encode($queue, JSON_UNESCAPED_UNICODE), LOCK_EX);
+
+        // 所有操作完成后再返回JSON
+        echo json_encode(['success' => true, 'message' => '验证码已发送，请注意查收邮箱']);
         break;
 
     case 'processEmails':
