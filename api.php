@@ -356,12 +356,15 @@ switch ($action) {
             }
         }
 
-        // 保存用户
+        // 保存用户 - 判断是否是第一个用户（自动成为群主）
+        $isFirstUser = count($users) === 0;
+        $role = $isFirstUser ? 'owner' : 'member';
         $users[] = [
             'username' => $username,
             'email' => $email,
             'password' => password_hash($password, PASSWORD_DEFAULT),
             'avatar' => $avatarPath,
+            'role' => $role,
             'created' => time()
         ];
         saveUsers($users);
@@ -370,7 +373,13 @@ switch ($action) {
         unset($codes[$email]);
         saveCodes($codes);
 
-        echo json_encode(['success' => true, 'message' => '注册成功！']);
+        // 自动登录
+        session_start();
+        $_SESSION['username'] = $username;
+        $_SESSION['avatar'] = $avatarPath;
+        $_SESSION['role'] = $role;
+
+        echo json_encode(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
         break;
 
     case 'register':
@@ -420,9 +429,11 @@ switch ($action) {
                 session_start();
                 $_SESSION['username'] = $username;
                 $avatar = $user['avatar'] ?? '';
+                $role = $user['role'] ?? 'member';
                 $_SESSION['avatar'] = $avatar;
+                $_SESSION['role'] = $role;
                 $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
-                echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $username, 'avatar' => $avatarUrl]);
+                echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $username, 'avatar' => $avatarUrl, 'role' => $role]);
                 break;
             }
         }
@@ -442,14 +453,193 @@ switch ($action) {
         session_start();
         if (isset($_SESSION['username'])) {
             $avatar = $_SESSION['avatar'] ?? '';
+            $role = $_SESSION['role'] ?? 'member';
             $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
             echo json_encode([
                 'success' => true,
                 'username' => $_SESSION['username'],
-                'avatar' => $avatarUrl
+                'avatar' => $avatarUrl,
+                'role' => $role
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => '未登录']);
+        }
+        break;
+
+    case 'getMembers':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $users = readUsers();
+        $members = [];
+        foreach ($users as $user) {
+            $avatarUrl = !empty($user['avatar']) ? getBaseUrl() . '/' . $user['avatar'] : '';
+            $members[] = [
+                'username' => $user['username'],
+                'avatar' => $avatarUrl,
+                'role' => $user['role'] ?? 'member',
+                'email' => $user['email'] ?? '',
+                'created' => $user['created'] ?? 0
+            ];
+        }
+        echo json_encode(['success' => true, 'members' => $members]);
+        break;
+
+    case 'setRole':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $currentUser = $_SESSION['username'];
+        $users = readUsers();
+        $currentRole = 'member';
+        foreach ($users as $user) {
+            if ($user['username'] === $currentUser) {
+                $currentRole = $user['role'] ?? 'member';
+                break;
+            }
+        }
+        if ($currentRole !== 'owner') {
+            echo json_encode(['success' => false, 'message' => '只有群主可以设置角色']);
+            break;
+        }
+        $targetUser = trim($_POST['username'] ?? '');
+        $newRole = $_POST['role'] ?? 'member';
+        if (!in_array($newRole, ['owner', 'admin', 'member'])) {
+            echo json_encode(['success' => false, 'message' => '无效角色']);
+            break;
+        }
+        $found = false;
+        foreach ($users as &$user) {
+            if ($user['username'] === $targetUser) {
+                $user['role'] = $newRole;
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            echo json_encode(['success' => false, 'message' => '用户不存在']);
+            break;
+        }
+        saveUsers($users);
+        echo json_encode(['success' => true, 'message' => '角色设置成功']);
+        break;
+
+    case 'getVerificationCodes':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $users = readUsers();
+        $currentRole = 'member';
+        foreach ($users as $user) {
+            if ($user['username'] === $_SESSION['username']) {
+                $currentRole = $user['role'] ?? 'member';
+                break;
+            }
+        }
+        if (!in_array($currentRole, ['owner', 'admin'])) {
+            echo json_encode(['success' => false, 'message' => '只有管理员可以查看']);
+            break;
+        }
+        $codes = readCodes();
+        $codeList = [];
+        foreach ($codes as $email => $data) {
+            $status = 'unused';
+            if (time() > $data['expires_at']) {
+                $status = 'expired';
+            }
+            $codeList[] = [
+                'email' => $email,
+                'code' => $data['code'],
+                'sent_at' => $data['sent_at'],
+                'expires_at' => $data['expires_at'],
+                'status' => $status
+            ];
+        }
+        echo json_encode(['success' => true, 'codes' => $codeList]);
+        break;
+
+    case 'getFiles':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $type = $_GET['type'] ?? 'file';
+        $filesFile = __DIR__ . '/group_files.json';
+        if (!file_exists($filesFile)) file_put_contents($filesFile, json_encode([]));
+        $files = json_decode(file_get_contents($filesFile), true) ?: [];
+        $result = [];
+        foreach ($files as $file) {
+            if ($file['type'] === $type) {
+                $result[] = [
+                    'id' => $file['id'],
+                    'name' => $file['name'],
+                    'path' => getBaseUrl() . '/' . $file['path'],
+                    'uploader' => $file['uploader'],
+                    'uploaded_at' => $file['uploaded_at'],
+                    'type' => $file['type']
+                ];
+            }
+        }
+        echo json_encode(['success' => true, 'files' => $result]);
+        break;
+
+    case 'uploadFile':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+        $currentUser = $_SESSION['username'];
+        $users = readUsers();
+        $currentRole = 'member';
+        foreach ($users as $user) {
+            if ($user['username'] === $currentUser) {
+                $currentRole = $user['role'] ?? 'member';
+                break;
+            }
+        }
+        if (!in_array($currentRole, ['owner', 'admin'])) {
+            echo json_encode(['success' => false, 'message' => '只有管理员可以上传']);
+            break;
+        }
+        if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['success' => false, 'message' => '上传失败']);
+            break;
+        }
+        $fileType = $_POST['fileType'] ?? 'file';
+        $filesDir = __DIR__ . '/uploads/group_' . ($fileType === 'doc' ? 'docs' : 'files') . '/';
+        if (!file_exists($filesDir)) mkdir($filesDir, 0777, true);
+
+        $file = $_FILES['file'];
+        $originalName = $file['name'];
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9_\-\.]/u', '_', $originalName);
+        $filepath = $filesDir . $filename;
+
+        if (move_uploaded_file($file['tmp_name'], $filepath)) {
+            $relativePath = 'uploads/group_' . ($fileType === 'doc' ? 'docs' : 'files') . '/' . $filename;
+            $filesFile = __DIR__ . '/group_files.json';
+            if (!file_exists($filesFile)) file_put_contents($filesFile, json_encode([]));
+            $files = json_decode(file_get_contents($filesFile), true) ?: [];
+            $files[] = [
+                'id' => time() . '_' . rand(1000, 9999),
+                'name' => $originalName,
+                'path' => $relativePath,
+                'uploader' => $currentUser,
+                'uploaded_at' => time(),
+                'type' => $fileType
+            ];
+            file_put_contents($filesFile, json_encode($files, JSON_UNESCAPED_UNICODE));
+            echo json_encode(['success' => true, 'message' => '上传成功']);
+        } else {
+            echo json_encode(['success' => false, 'message' => '保存失败']);
         }
         break;
 
@@ -581,6 +771,7 @@ switch ($action) {
         }
 
         $lastTime = intval($_GET['lastTime'] ?? 0);
+        $users = readUsers();
 
         $messages = [];
         if (file_exists($messagesFile)) {
@@ -592,11 +783,20 @@ switch ($action) {
                     if ($timestamp > $lastTime) {
                         $avatar = $parts[0];
                         $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
+                        $username = $parts[1];
+                        $role = 'member';
+                        foreach ($users as $user) {
+                            if ($user['username'] === $username) {
+                                $role = $user['role'] ?? 'member';
+                                break;
+                            }
+                        }
                         $msg = [
                             'avatar' => $avatarUrl,
-                            'username' => $parts[1],
+                            'username' => $username,
                             'message' => $parts[2],
-                            'timestamp' => $timestamp
+                            'timestamp' => $timestamp,
+                            'role' => $role
                         ];
                         // 第5个字段是语音时长
                         if (isset($parts[4])) {

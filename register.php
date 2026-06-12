@@ -566,10 +566,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showMessage('注册成功！即将跳转登录页', 'success');
+                    showMessage('注册成功！即将进入聊天', 'success');
                     setTimeout(() => {
-                        window.location.href = 'index.php';
-                    }, 1500);
+                        window.location.href = 'chat.php';
+                    }, 1000);
                 } else {
                     showMessage(data.message, 'error');
                 }
