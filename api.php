@@ -96,16 +96,23 @@ function sendEmail($to, $subject, $body) {
     $smtpUser = '3237374823@qq.com';
     $smtpPass = 'rzhommscighnchcg';
     $fromName = '聊天系统';
+    $timeout = 2; // 2秒超时
 
     // 尝试使用 SSL 连接
-    $socket = @fsockopen('ssl://' . $smtpServer, $smtpPort, $errno, $errstr, 30);
+    $context = stream_context_create([
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'disable_verify_peer' => true
+        ]
+    ]);
+    $socket = @stream_socket_client('ssl://' . $smtpServer . ':' . $smtpPort, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
     if (!$socket) {
-        // 失败则尝试 25 端口
-        $socket = @fsockopen($smtpServer, 25, $errno, $errstr, 30);
-        if (!$socket) {
-            return ['success' => false, 'message' => '无法连接邮件服务器: ' . $errstr];
-        }
+        return ['success' => false, 'message' => '无法连接邮件服务器'];
     }
+
+    // 设置超时
+    stream_set_timeout($socket, $timeout);
 
     $response = fgets($socket, 1024);
     if (substr($response, 0, 3) != '220') {
@@ -283,7 +290,7 @@ switch ($action) {
             echo json_encode(['success' => true, 'message' => '验证码已发送']);
         } else {
             // 邮件发送失败，但为了方便测试，仍然把验证码存在，可以继续
-            echo json_encode(['success' => true, 'message' => '验证码已生成（' . $code . '）']);
+            echo json_encode(['success' => true, 'message' => '验证码已生成（测试用）: ' . $code]);
         }
         break;
 

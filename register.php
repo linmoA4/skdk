@@ -518,7 +518,8 @@
                     btn.textContent = '发送验证码';
                 }
             } catch (err) {
-                showMessage('网络错误，请重试', 'error');
+                console.error('发送验证码失败:', err);
+                showMessage('网络错误，请检查网络后重试', 'error');
                 btn.disabled = false;
                 btn.textContent = '发送验证码';
             }
