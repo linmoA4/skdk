@@ -1192,6 +1192,8 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message' + (isSelf ? ' self' : '');
+            messageDiv.dataset.timestamp = msg.timestamp;
+            messageDiv.dataset.username = msg.username;
 
             const avatarHtml = msg.avatar
                 ? `<img src="${msg.avatar}" class="message-avatar">`
@@ -1242,8 +1244,87 @@
                 </div>
             `;
 
+            // 长按撤回功能（仅自己的消息）
+            if (isSelf) {
+                setupLongPressRecall(messageDiv, msg.timestamp);
+            }
+
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 长按撤回
+        function setupLongPressRecall(element, timestamp) {
+            let pressTimer = null;
+            let isLongPress = false;
+
+            element.addEventListener('mousedown', (e) => {
+                isLongPress = false;
+                pressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    showRecallConfirm(element, timestamp);
+                }, 800);
+            });
+
+            element.addEventListener('mouseup', () => {
+                if (pressTimer) clearTimeout(pressTimer);
+            });
+
+            element.addEventListener('mouseleave', () => {
+                if (pressTimer) clearTimeout(pressTimer);
+            });
+
+            element.addEventListener('touchstart', (e) => {
+                isLongPress = false;
+                pressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    showRecallConfirm(element, timestamp);
+                }, 800);
+            }, { passive: true });
+
+            element.addEventListener('touchend', () => {
+                if (pressTimer) clearTimeout(pressTimer);
+            });
+
+            element.addEventListener('touchmove', () => {
+                if (pressTimer) clearTimeout(pressTimer);
+            }, { passive: true });
+        }
+
+        // 显示撤回确认
+        function showRecallConfirm(element, timestamp) {
+            if (confirm('是否撤回这条消息？（2分钟内有效）')) {
+                recallMessage(timestamp, element);
+            }
+        }
+
+        // 撤回消息
+        async function recallMessage(timestamp, element) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'recallMessage');
+                formData.append('timestamp', timestamp);
+
+                const response = await fetch('api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // 从DOM中移除消息
+                    element.style.opacity = '0';
+                    element.style.transform = 'scale(0.8)';
+                    element.style.transition = 'all 0.3s';
+                    setTimeout(() => {
+                        element.remove();
+                    }, 300);
+                } else {
+                    alert(data.message);
+                }
+            } catch (err) {
+                alert('撤回失败，请重试');
+            }
         }
 
         function playAudio(btn, src) {
@@ -1326,7 +1407,7 @@
 
                 await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
 
@@ -1351,7 +1432,7 @@
 
                 await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
             } catch (err) {
@@ -1515,7 +1596,7 @@
             try {
                 await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
             } catch (err) {
@@ -1559,7 +1640,7 @@
             try {
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
                 const data = await response.json();
@@ -1598,7 +1679,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
                 const data = await response.json();
@@ -1754,7 +1835,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
                 const data = await response.json();
@@ -1858,7 +1939,7 @@
             try {
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
+                    body: formData
                     
                 });
                 const data = await response.json();

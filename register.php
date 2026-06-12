@@ -401,8 +401,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
-                    
+                    body: formData
                 });
                 const data = await response.json();
 
@@ -453,8 +452,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
-                    
+                    body: formData
                 });
                 const data = await response.json();
 
@@ -493,8 +491,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
-                    
+                    body: formData
                 });
                 const data = await response.json();
 
@@ -553,8 +550,7 @@
 
                 const response = await fetch('api.php', {
                     method: 'POST',
-                    body: formData,
-                    
+                    body: formData
                 });
 
                 if (!response.ok) {

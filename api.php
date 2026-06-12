@@ -919,6 +919,57 @@ switch ($action) {
         echo json_encode(['success' => true, 'timestamp' => $timestamp]);
         break;
 
+    case 'recallMessage':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '请先登录']);
+            break;
+        }
+
+        $username = $_SESSION['username'];
+        $timestamp = intval($_POST['timestamp'] ?? 0);
+
+        if ($timestamp <= 0) {
+            echo json_encode(['success' => false, 'message' => '无效的消息']);
+            break;
+        }
+
+        // 只能撤回2分钟内的消息
+        if (time() - $timestamp > 120) {
+            echo json_encode(['success' => false, 'message' => '消息已超过2分钟，无法撤回']);
+            break;
+        }
+
+        if (!file_exists($messagesFile)) {
+            echo json_encode(['success' => false, 'message' => '消息不存在']);
+            break;
+        }
+
+        $lines = file($messagesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $newLines = [];
+        $found = false;
+        foreach ($lines as $line) {
+            $parts = explode('|', $line);
+            if (count($parts) >= 4) {
+                $msgTime = intval($parts[3]);
+                $msgUser = $parts[1];
+                // 匹配时间和用户名
+                if ($msgTime === $timestamp && $msgUser === $username) {
+                    $found = true;
+                    continue; // 删除这条消息
+                }
+            }
+            $newLines[] = $line;
+        }
+
+        if ($found) {
+            file_put_contents($messagesFile, implode("\n", $newLines) . (count($newLines) > 0 ? "\n" : ''));
+            echo json_encode(['success' => true, 'message' => '消息已撤回']);
+        } else {
+            echo json_encode(['success' => false, 'message' => '消息不存在或无权撤回']);
+        }
+        break;
+
     case 'getMessages':
         session_start();
         if (!isset($_SESSION['username'])) {
