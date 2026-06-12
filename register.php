@@ -399,7 +399,7 @@
                 formData.append('action', 'checkUsername');
                 formData.append('username', username);
 
-                const response = await fetch(window.location.origin + '/api.php', {
+                const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
                     credentials: 'include'
@@ -451,7 +451,7 @@
                 formData.append('action', 'checkEmail');
                 formData.append('email', email);
 
-                const response = await fetch(window.location.origin + '/api.php', {
+                const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
                     credentials: 'include'
@@ -491,7 +491,7 @@
                 formData.append('action', 'sendCode');
                 formData.append('email', email);
 
-                const response = await fetch(window.location.origin + '/api.php', {
+                const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
                     credentials: 'include'
@@ -550,7 +550,7 @@
                     formData.append('avatar', selectedAvatar);
                 }
 
-                const response = await fetch(window.location.origin + window.location.pathname.replace('register.php', 'api.php'), {
+                const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
                     credentials: 'include'

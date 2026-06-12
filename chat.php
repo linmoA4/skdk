@@ -1264,14 +1264,8 @@
                 btn.closest('.message-audio').querySelectorAll('.wave-bar').forEach(bar => bar.classList.remove('playing'));
                 currentPlayingAudio = null;
             } else {
-                // 播放 - 使用完整URL确保路径正确
-                let audioUrl = src;
-                if (src.startsWith('uploads/')) {
-                    audioUrl = window.location.origin + '/' + src;
-                } else if (!src.startsWith('http') && !src.startsWith('/')) {
-                    audioUrl = window.location.origin + '/' + src;
-                }
-                const audio = new Audio(audioUrl);
+                // 播放 - 使用相对路径即可（api.php 返回的 uploads/xxx.webm）
+                const audio = new Audio(src);
                 audio.onloadedmetadata = () => {
                     const duration = formatDuration(audio.duration);
                     btn.closest('.message-audio').querySelector('.audio-duration').textContent = duration;
