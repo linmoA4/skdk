@@ -402,7 +402,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -454,7 +454,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -494,7 +494,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -554,7 +554,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
 
                 if (!response.ok) {

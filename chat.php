@@ -1107,7 +1107,7 @@
         async function checkLogin() {
             try {
                 const response = await fetch('api.php?action=getUser', {
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -1162,7 +1162,7 @@
         async function loadMessages() {
             try {
                 const response = await fetch(`api.php?action=getMessages&lastTime=${lastMessageTime}`, {
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
                 if (data.success && data.messages.length > 0) {
@@ -1327,7 +1327,7 @@
                 await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
 
                 // 触发机器人自动回复（延迟 1 秒）
@@ -1352,7 +1352,7 @@
                 await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
             } catch (err) {
                 console.error('机器人回复失败');
@@ -1364,7 +1364,7 @@
             try {
                 await fetch('机器人.php', {
                     method: 'GET',
-                    credentials: 'include'
+                    
                 });
             } catch (err) {
                 // 静默失败
@@ -1516,7 +1516,7 @@
                 await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
             } catch (err) {
                 console.error('上传失败');
@@ -1560,7 +1560,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -1599,7 +1599,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -1624,7 +1624,7 @@
 
         async function logout() {
             try {
-                await fetch('api.php?action=logout', { credentials: 'include' });
+                await fetch('api.php?action=logout', {  });
             } catch (err) {}
             currentUser = null;
             if (pollInterval) clearInterval(pollInterval);
@@ -1667,7 +1667,7 @@
 
         async function loadMembersPreview() {
             try {
-                const response = await fetch('api.php?action=getMembers', { credentials: 'include' });
+                const response = await fetch('api.php?action=getMembers', {  });
                 const data = await response.json();
                 if (data.success) {
                     const previewDiv = document.getElementById('membersPreview');
@@ -1695,7 +1695,7 @@
             document.getElementById('menuTitle').textContent = '所有成员';
 
             try {
-                const response = await fetch('api.php?action=getMembers', { credentials: 'include' });
+                const response = await fetch('api.php?action=getMembers', {  });
                 const data = await response.json();
                 if (data.success) {
                     const listDiv = document.getElementById('allMembersList');
@@ -1755,7 +1755,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -1775,7 +1775,7 @@
             document.getElementById('menuTitle').textContent = '群文件';
 
             try {
-                const response = await fetch('api.php?action=getFiles&type=file', { credentials: 'include' });
+                const response = await fetch('api.php?action=getFiles&type=file', {  });
                 const data = await response.json();
                 if (data.success) {
                     const listDiv = document.getElementById('filesList');
@@ -1811,7 +1811,7 @@
             document.getElementById('menuTitle').textContent = '群文档';
 
             try {
-                const response = await fetch('api.php?action=getFiles&type=doc', { credentials: 'include' });
+                const response = await fetch('api.php?action=getFiles&type=doc', {  });
                 const data = await response.json();
                 if (data.success) {
                     const listDiv = document.getElementById('docsList');
@@ -1859,7 +1859,7 @@
                 const response = await fetch('api.php', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    
                 });
                 const data = await response.json();
 
@@ -1882,7 +1882,7 @@
             document.getElementById('menuTitle').textContent = '管理后台';
 
             try {
-                const response = await fetch('api.php?action=getVerificationCodes', { credentials: 'include' });
+                const response = await fetch('api.php?action=getVerificationCodes', {  });
                 const data = await response.json();
                 if (data.success) {
                     const listDiv = document.getElementById('verificationCodesList');
