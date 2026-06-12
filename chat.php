@@ -1329,8 +1329,45 @@
                     body: formData,
                     credentials: 'include'
                 });
+
+                // 触发机器人自动回复（延迟 1 秒）
+                setTimeout(() => {
+                    triggerBotReply(message);
+                }, 1000);
+
+                // 触发定时消息检查
+                checkTimedMessages();
             } catch (err) {
                 console.error('发送失败');
+            }
+        }
+
+        // 机器人自动回复
+        async function triggerBotReply(userMessage) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'botReply');
+                formData.append('message', userMessage);
+
+                await fetch('api.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+            } catch (err) {
+                console.error('机器人回复失败');
+            }
+        }
+
+        // 检查定时消息
+        async function checkTimedMessages() {
+            try {
+                await fetch('机器人.php', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+            } catch (err) {
+                // 静默失败
             }
         }
 

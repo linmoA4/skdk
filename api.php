@@ -51,6 +51,16 @@ function readUsers() {
             $users[] = $user;
         }
     }
+    // 从管理员列表.txt 读取管理员
+    $adminFile = __DIR__ . '/管理员列表.txt';
+    if (file_exists($adminFile)) {
+        $admins = file($adminFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($users as &$user) {
+            if ($user['role'] !== 'owner' && in_array($user['username'], $admins)) {
+                $user['role'] = 'admin';
+            }
+        }
+    }
     return $users;
 }
 
@@ -63,6 +73,15 @@ function saveUsers($users) {
         $content .= $user['password'] . "\n";
     }
     file_put_contents($usersFile, $content);
+    // 同步更新管理员列表.txt
+    $adminFile = __DIR__ . '/管理员列表.txt';
+    $adminList = '';
+    foreach ($users as $user) {
+        if (isset($user['role']) && $user['role'] === 'admin') {
+            $adminList .= $user['username'] . "\n";
+        }
+    }
+    file_put_contents($adminFile, $adminList);
 }
 
 function cleanOldMessages() {
@@ -571,6 +590,85 @@ switch ($action) {
         }
         saveUsers($users);
         echo json_encode(['success' => true, 'message' => '角色设置成功']);
+        break;
+
+    case 'botReply':
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '未登录']);
+            break;
+        }
+
+        $botConfigFile = __DIR__ . '/机器人配置.json';
+        if (!file_exists($botConfigFile)) {
+            echo json_encode(['success' => false, 'message' => '机器人未配置']);
+            break;
+        }
+
+        $config = json_decode(file_get_contents($botConfigFile), true);
+        if (empty($config['enabled'])) {
+            echo json_encode(['success' => false, 'message' => '机器人已禁用']);
+            break;
+        }
+
+        $userMsg = trim($_POST['message'] ?? '');
+        $botName = $config['name'] ?? '群聊机器人';
+        $autoReply = $config['autoReply'] ?? '';
+
+        // 解析自动回复规则
+        $replyRules = [];
+        $defaultReply = '';
+        $lines = explode("\n", $autoReply);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            $parts = explode('=', $line, 2);
+            if (count($parts) === 2) {
+                $key = trim($parts[0]);
+                $val = trim($parts[1]);
+                if (empty($key)) {
+                    $defaultReply = $val;
+                } else {
+                    $replyRules[$key] = $val;
+                }
+            }
+        }
+
+        // 匹配关键词
+        $reply = '';
+        foreach ($replyRules as $keyword => $response) {
+            if (mb_strpos($userMsg, $keyword) !== false) {
+                $reply = $response;
+                break;
+            }
+        }
+
+        if (empty($reply) && !empty($defaultReply)) {
+            $reply = $defaultReply;
+        }
+
+        if (empty($reply)) {
+            // 无匹配关键词，无回复
+            echo json_encode(['success' => true, 'replied' => false]);
+            break;
+        }
+
+        // 防止重复发送相同内容（间隔限制 - 防止死循环）
+        $lastReplyFile = __DIR__ . '/机器人_last_reply.txt';
+        if (file_exists($lastReplyFile)) {
+            $last = trim(file_get_contents($lastReplyFile));
+            if (time() - intval($last) < 3) {
+                echo json_encode(['success' => true, 'replied' => false, 'throttled' => true]);
+                break;
+            }
+        }
+        file_put_contents($lastReplyFile, time());
+
+        // 发送机器人回复
+        $messagesFile = __DIR__ . '/信息.txt';
+        $line = '|' . $botName . '|' . $reply . '|' . time() . "\n";
+        file_put_contents($messagesFile, $line, FILE_APPEND);
+        echo json_encode(['success' => true, 'replied' => true, 'reply' => $reply]);
         break;
 
     case 'getVerificationCodes':
