@@ -430,6 +430,19 @@ switch ($action) {
         $_SESSION['avatar'] = '';
         $_SESSION['role'] = $role;
 
+        // 发送欢迎消息
+        $botConfigFile = __DIR__ . '/机器人配置.json';
+        if (file_exists($botConfigFile)) {
+            $config = json_decode(file_get_contents($botConfigFile), true);
+            if (!empty($config['enabled']) && !empty($config['welcome'])) {
+                $botName = $config['name'] ?? '群聊机器人';
+                $welcome = str_replace('{username}', $username, $config['welcome']);
+                $messagesFile = __DIR__ . '/信息.txt';
+                $msgLine = '|' . $botName . '|' . $welcome . '|' . time() . "\n";
+                file_put_contents($messagesFile, $msgLine, FILE_APPEND);
+            }
+        }
+
         echo json_encode(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
         break;
 
