@@ -27,18 +27,42 @@ $messagesFile = __DIR__ . '/信息.txt';
 if (!file_exists($avatarsDir)) mkdir($avatarsDir, 0777, true);
 if (!file_exists($audiosDir)) mkdir($audiosDir, 0777, true);
 
-// 确保用户数据文件存在
-$usersFile = __DIR__ . '/users.json';
-if (!file_exists($usersFile)) file_put_contents($usersFile, json_encode([]));
+// 确保用户数据文件存在（账号.txt 格式：邮箱/名称/密码，每个用户3行）
+$usersFile = __DIR__ . '/账号.txt';
+if (!file_exists($usersFile)) file_put_contents($usersFile, '');
 
 function readUsers() {
     global $usersFile;
-    return json_decode(file_get_contents($usersFile), true) ?: [];
+    $lines = file($usersFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $users = [];
+    // 每3行是一个用户：email / username / password
+    for ($i = 0; $i < count($lines); $i += 3) {
+        if (isset($lines[$i], $lines[$i + 1], $lines[$i + 2])) {
+            $user = [
+                'email' => $lines[$i],
+                'username' => $lines[$i + 1],
+                'password' => $lines[$i + 2],
+                'role' => 'member'
+            ];
+            // 第一个注册的用户是群主
+            if (count($users) === 0) {
+                $user['role'] = 'owner';
+            }
+            $users[] = $user;
+        }
+    }
+    return $users;
 }
 
 function saveUsers($users) {
     global $usersFile;
-    file_put_contents($usersFile, json_encode($users, JSON_UNESCAPED_UNICODE));
+    $content = '';
+    foreach ($users as $user) {
+        $content .= $user['email'] . "\n";
+        $content .= $user['username'] . "\n";
+        $content .= $user['password'] . "\n";
+    }
+    file_put_contents($usersFile, $content);
 }
 
 function cleanOldMessages() {
@@ -237,16 +261,17 @@ switch ($action) {
             break;
         }
         $users = readUsers();
-        $count = 0;
+        $exists = false;
         foreach ($users as $user) {
             if (isset($user['email']) && $user['email'] === $email) {
-                $count++;
+                $exists = true;
+                break;
             }
         }
-        if ($count >= 2) {
-            echo json_encode(['success' => false, 'message' => '该邮箱最多绑定2个账号，已达上限']);
+        if ($exists) {
+            echo json_encode(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
         } else {
-            echo json_encode(['success' => true, 'message' => '邮箱可用', 'count' => $count]);
+            echo json_encode(['success' => true, 'message' => '邮箱可用']);
         }
         break;
 
@@ -331,21 +356,21 @@ switch ($action) {
         // 检查用户名和邮箱
         $users = readUsers();
         $usernameExists = false;
-        $emailCount = 0;
+        $emailExists = false;
         foreach ($users as $user) {
             if ($user['username'] === $username) {
                 $usernameExists = true;
             }
-            if (isset($user['email']) && $user['email'] === $email) {
-                $emailCount++;
+            if ($user['email'] === $email) {
+                $emailExists = true;
             }
         }
         if ($usernameExists) {
             echo json_encode(['success' => false, 'message' => '用户名已存在']);
             break;
         }
-        if ($emailCount >= 2) {
-            echo json_encode(['success' => false, 'message' => '该邮箱已达绑定上限']);
+        if ($emailExists) {
+            echo json_encode(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
             break;
         }
 
@@ -363,14 +388,13 @@ switch ($action) {
             }
         }
 
-        // 保存用户 - 判断是否是第一个用户（自动成为群主）
+        // 保存用户
         $isFirstUser = count($users) === 0;
         $role = $isFirstUser ? 'owner' : 'member';
         $users[] = [
             'username' => $username,
             'email' => $email,
-            'password' => password_hash($password, PASSWORD_DEFAULT),
-            'avatar' => $avatarPath,
+            'password' => $password, // 明文存储
             'role' => $role,
             'created' => time()
         ];
@@ -383,7 +407,8 @@ switch ($action) {
         // 自动登录
         session_start();
         $_SESSION['username'] = $username;
-        $_SESSION['avatar'] = $avatarPath;
+        $_SESSION['email'] = $email;
+        $_SESSION['avatar'] = '';
         $_SESSION['role'] = $role;
 
         echo json_encode(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
@@ -392,6 +417,7 @@ switch ($action) {
     case 'register':
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
+        $email = trim($_POST['email'] ?? '');
 
         if (empty($username) || empty($password)) {
             echo json_encode(['success' => false, 'message' => '用户名和密码不能为空']);
@@ -404,21 +430,29 @@ switch ($action) {
         }
 
         $users = readUsers();
-        $exists = false;
+        $usernameExists = false;
+        $emailExists = false;
         foreach ($users as $user) {
             if ($user['username'] === $username) {
-                $exists = true;
-                break;
+                $usernameExists = true;
+            }
+            if (!empty($email) && $user['email'] === $email) {
+                $emailExists = true;
             }
         }
 
-        if ($exists) {
+        if ($usernameExists) {
             echo json_encode(['success' => false, 'message' => '用户名已存在']);
+        } elseif ($emailExists) {
+            echo json_encode(['success' => false, 'message' => '该邮箱已被注册']);
         } else {
+            $isFirstUser = count($users) === 0;
+            $role = $isFirstUser ? 'owner' : 'member';
             $users[] = [
                 'username' => $username,
-                'password' => password_hash($password, PASSWORD_DEFAULT),
-                'avatar' => '',
+                'email' => $email,
+                'password' => $password,
+                'role' => $role,
                 'created' => time()
             ];
             saveUsers($users);
@@ -427,25 +461,29 @@ switch ($action) {
         break;
 
     case 'login':
-        $username = trim($_POST['username'] ?? '');
+        $account = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
 
         $users = readUsers();
+        $loginSuccess = false;
+        $loginUser = null;
         foreach ($users as $user) {
-            if ($user['username'] === $username && password_verify($password, $user['password'])) {
-                session_start();
-                $_SESSION['username'] = $username;
-                $avatar = $user['avatar'] ?? '';
-                $role = $user['role'] ?? 'member';
-                $_SESSION['avatar'] = $avatar;
-                $_SESSION['role'] = $role;
-                $avatarUrl = $avatar ? getBaseUrl() . '/' . $avatar : '';
-                echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $username, 'avatar' => $avatarUrl, 'role' => $role]);
+            // 支持邮箱登录或用户名登录
+            if (($user['username'] === $account || $user['email'] === $account) && $user['password'] === $password) {
+                $loginSuccess = true;
+                $loginUser = $user;
                 break;
             }
         }
 
-        if (!isset($_SESSION['username'])) {
+        if ($loginSuccess) {
+            session_start();
+            $_SESSION['username'] = $loginUser['username'];
+            $_SESSION['email'] = $loginUser['email'];
+            $_SESSION['avatar'] = '';
+            $_SESSION['role'] = $loginUser['role'] ?? 'member';
+            echo json_encode(['success' => true, 'message' => '登录成功', 'username' => $loginUser['username'], 'avatar' => '', 'role' => $loginUser['role'] ?? 'member']);
+        } else {
             echo json_encode(['success' => false, 'message' => '用户名或密码错误']);
         }
         break;
