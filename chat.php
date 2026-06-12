@@ -296,6 +296,20 @@
             color: #2196f3;
         }
 
+        /* 管理员删除按钮 */
+        .msg-delete-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+        .msg-delete-btn:hover { background: #d32f2f; }
+
         /* 按钮样式 */
         .message-button {
             display: inline-flex;
@@ -1341,6 +1355,7 @@
                 const linkMatch = msg.message.match(/\[下载链接: (.+)\]/);
                 const url = linkMatch ? linkMatch[1] : '#';
                 const text = msg.message.replace(/\[下载链接: .+\]/, '').trim();
+                const isPrivileged = currentUser && (currentUser.role === 'owner' || currentUser.role === 'admin');
                 contentHtml = `
                     <div class="message-file-card" onclick="window.open('${url}', '_blank')">
                         <div class="file-card-icon">📁</div>
@@ -1350,6 +1365,7 @@
                         </div>
                         <div class="file-card-arrow">➜</div>
                     </div>
+                    ${isPrivileged ? `<button class="msg-delete-btn" onclick="event.stopPropagation(); deleteFileMessage(${msg.timestamp}, '${url.replace(/'/g, "\\'")}');">🗑 删除</button>` : ''}
                 `;
             } else if (msg.message.includes('[按钮链接:')) {
                 // 按钮消息
@@ -1468,6 +1484,36 @@
                 }
             } catch (err) {
                 alert('撤回失败，请重试');
+            }
+        }
+
+        // 管理员删除群文件消息
+        async function deleteFileMessage(timestamp, url) {
+            if (!confirm('确认删除此群文件消息？')) return;
+            try {
+                const formData = new FormData();
+                formData.append('action', 'deleteFileMessage');
+                formData.append('timestamp', timestamp);
+                const response = await fetch('api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    // 找到并删除DOM元素
+                    const allMsgs = document.querySelectorAll('.message');
+                    allMsgs.forEach(m => {
+                        if (m.textContent.includes(url)) {
+                            m.style.opacity = '0';
+                            m.style.transition = 'opacity 0.3s';
+                            setTimeout(() => m.remove(), 300);
+                        }
+                    });
+                } else {
+                    alert(data.message);
+                }
+            } catch (err) {
+                alert('删除失败，请重试');
             }
         }
 

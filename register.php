@@ -189,12 +189,51 @@
         .code-input-group {
             display: flex;
             gap: 10px;
+            align-items: center;
         }
-        .code-input-group input {
+        /* 验证码输入框：默认折叠成一条窄条，点击后丝滑展开 */
+        .code-collapsed-input {
+            flex: 0 0 auto;
+            width: 40px;
+            min-width: 0;
+            padding: 12px 6px;
+            border: 2px solid #e1e1e1;
+            border-radius: 10px;
+            font-size: 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        letter-spacing 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                        border-color 0.4s,
+                        box-shadow 0.4s;
+            color: #999;
+            background: #fafafa;
+            overflow: hidden;
+            white-space: nowrap;
+            letter-spacing: 0;
+        }
+        .code-collapsed-input.expanded {
             flex: 1;
+            width: auto;
+            padding: 12px;
+            font-size: 15px;
+            cursor: text;
+            color: #333;
+            background: white;
+            letter-spacing: 4px;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            animation: codePulse 0.6s ease-out;
+        }
+        @keyframes codePulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); opacity: 1; }
         }
         .code-btn {
-            padding: 0 20px;
+            padding: 12px 20px;
             background: #f0f0f0;
             color: #555;
             border: none;
@@ -203,7 +242,7 @@
             font-weight: 500;
             cursor: pointer;
             white-space: nowrap;
-            transition: all 0.2s;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .code-btn:hover:not(:disabled) {
             background: #e0e0e0;
@@ -211,6 +250,19 @@
         .code-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+        }
+        /* 查看验证码按钮：当输入框展开时会被挤掉（隐藏） */
+        .code-btn.secondary-btn {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .code-btn.secondary-btn.hidden {
+            opacity: 0;
+            width: 0;
+            padding: 12px 0;
+            margin: 0;
+            overflow: hidden;
+            pointer-events: none;
         }
         .message {
             padding: 12px;
@@ -310,9 +362,9 @@
             <div class="form-group">
                 <label>请输入邮箱验证码</label>
                 <div class="code-input-group">
-                    <input type="text" id="codeInput" placeholder="6位验证码" required maxlength="6" style="letter-spacing: 4px; text-align: center;">
+                    <input type="text" id="codeInput" class="code-collapsed-input" placeholder="点击输入" required maxlength="6" onclick="expandCodeInput(this)" oninput="expandCodeInput(this)" onfocus="expandCodeInput(this)">
                     <button class="code-btn" id="sendCodeBtn" onclick="sendVerificationCode()">发送验证码</button>
-                    <button class="code-btn" id="queryCodeBtn" onclick="getMyCode()" style="display: none; background: #fff3e0; color: #e65100;">查看验证码</button>
+                    <button class="code-btn secondary-btn" id="queryCodeBtn" onclick="getMyCode()" style="display: none;">查看验证码</button>
                 </div>
             </div>
             <div class="btn-row">
@@ -497,6 +549,17 @@
             setStep(2);
         }
 
+        // 点击验证码输入框后丝滑展开，并把"查看验证码"按钮挤掉
+        function expandCodeInput(el) {
+            if (el.classList.contains('expanded')) return;
+            el.classList.add('expanded');
+            el.placeholder = '6位验证码';
+            const qBtn = document.getElementById('queryCodeBtn');
+            if (qBtn && qBtn.style.display !== 'none') {
+                qBtn.classList.add('hidden');
+            }
+        }
+
         async function sendVerificationCode() {
             const email = document.getElementById('emailInput').value.trim().toLowerCase();
             if (!email) { showMessage('请先输入邮箱', 'error'); return; }
@@ -515,7 +578,7 @@
                 if (data === null) throw new Error('服务器返回异常');
 
                 if (data.success) {
-                    showMessage('验证码已发送，请查收邮箱。如长时间未收到，可点击"查看验证码"。', 'success');
+                    showMessage('验证码已生成，请耐心等待 10~25 秒，如未收到邮件可点击"查看验证码"获取。', 'success');
                     if (queryBtn) queryBtn.style.display = 'inline-block';
                     let countdown = 60;
                     btn.textContent = countdown + 's 后重发';

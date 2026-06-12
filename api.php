@@ -240,7 +240,8 @@ function saveCodeForEmail($email, $code)
     $codes[$email] = [
         'code' => $code,
         'sent_at' => time(),
-        'expires_at' => time() + 600
+        'expires_at' => time() + 600,
+        'status' => 'active'
     ];
     $result = writeJsonFile($codesFile, $codes);
     // 即使文件写入失败，也写入 session 作为降级（用户依旧可获取验证码）
@@ -253,14 +254,14 @@ function saveCodeForEmail($email, $code)
     return $result;
 }
 
-// 获取验证码：先查文件，再查 session
+// 获取验证码：先查文件，再查 session（只返回未过期且未使用的）
 function getCodeForEmail($email)
 {
     global $codesFile;
     $codes = readJsonFile($codesFile, []);
     if (isset($codes[$email])) {
         $c = $codes[$email];
-        if (time() <= $c['expires_at']) return $c['code'];
+        if (time() <= $c['expires_at'] && (empty($c['status']) || $c['status'] === 'active')) return $c['code'];
     }
     // 降级：查 session
     if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
@@ -276,7 +277,8 @@ function checkCodeValid($email, $inputCode)
     global $codesFile;
     $codes = readJsonFile($codesFile, []);
     if (isset($codes[$email]) && $codes[$email]['code'] === $inputCode
-        && time() <= $codes[$email]['expires_at']) {
+        && time() <= $codes[$email]['expires_at']
+        && (empty($codes[$email]['status']) || $codes[$email]['status'] === 'active')) {
         return true;
     }
     // 降级：session 中查
@@ -287,13 +289,16 @@ function checkCodeValid($email, $inputCode)
     return false;
 }
 
-// 清除已使用的验证码
+// 标记验证码为"已使用"（保留历史记录以便后台查看）
 function clearCodeForEmail($email)
 {
     global $codesFile;
     $codes = readJsonFile($codesFile, []);
-    if (isset($codes[$email])) unset($codes[$email]);
-    writeJsonFile($codesFile, $codes);
+    if (isset($codes[$email])) {
+        $codes[$email]['status'] = 'used';
+        $codes[$email]['used_at'] = time();
+        writeJsonFile($codesFile, $codes);
+    }
     if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
     if (isset($_SESSION['fallback_codes'][$email])) unset($_SESSION['fallback_codes'][$email]);
 }
@@ -1272,6 +1277,50 @@ switch ($action) {
             echo json_encode(['success' => true, 'message' => '消息已撤回']);
         } else {
             echo json_encode(['success' => false, 'message' => '消息不存在或无权撤回']);
+        }
+        break;
+
+    case 'deleteFileMessage':
+        // 管理员/群主删除群文件消息
+        session_start();
+        if (!isset($_SESSION['username'])) {
+            echo json_encode(['success' => false, 'message' => '请先登录']);
+            break;
+        }
+        // 检查是否为管理员或群主
+        $role = $_SESSION['role'] ?? 'member';
+        if ($role !== 'admin' && $role !== 'owner') {
+            echo json_encode(['success' => false, 'message' => '仅管理员或群主可删除']);
+            break;
+        }
+        $timestamp = intval($_POST['timestamp'] ?? 0);
+        if ($timestamp <= 0) {
+            echo json_encode(['success' => false, 'message' => '无效的消息']);
+            break;
+        }
+        if (!file_exists($messagesFile)) {
+            echo json_encode(['success' => true, 'message' => '消息已处理']);
+            break;
+        }
+        $lines = file($messagesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $newLines = [];
+        $found = false;
+        foreach ($lines as $line) {
+            $parts = explode('|', $line);
+            if (count($parts) >= 4) {
+                $msgTime = intval($parts[3]);
+                if ($msgTime === $timestamp) {
+                    $found = true;
+                    continue;
+                }
+            }
+            $newLines[] = $line;
+        }
+        if ($found) {
+            file_put_contents($messagesFile, implode("\n", $newLines) . (count($newLines) > 0 ? "\n" : ''));
+            echo json_encode(['success' => true, 'message' => '文件消息已删除']);
+        } else {
+            echo json_encode(['success' => true, 'message' => '消息已处理']);
         }
         break;
 
