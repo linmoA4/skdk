@@ -48,19 +48,81 @@ $announcementsFile = __DIR__ . '/群公告.json';
 $groupFilesFile = __DIR__ . '/群文件.json';
 $buttonsFile = __DIR__ . '/群按钮.json';
 
-if (!file_exists($avatarsDir)) mkdir($avatarsDir, 0777, true);
-if (!file_exists($audiosDir)) mkdir($audiosDir, 0777, true);
-if (!file_exists($announcementsFile)) file_put_contents($announcementsFile, json_encode([]));
-if (!file_exists($groupFilesFile)) file_put_contents($groupFilesFile, json_encode([]));
-if (!file_exists($buttonsFile)) file_put_contents($buttonsFile, json_encode([]));
+// 更可靠地创建目录（带权限修复）
+function ensureDir($dir) {
+    if (is_dir($dir)) {
+        if (!is_writable($dir)) @chmod($dir, 0777);
+        return is_writable($dir);
+    }
+    if (!is_dir(dirname($dir))) ensureDir(dirname($dir));
+    $old = umask(0);
+    $ok = @mkdir($dir, 0777, true);
+    umask($old);
+    return $ok || is_dir($dir);
+}
+
+ensureDir($uploadDir);
+ensureDir($avatarsDir);
+ensureDir($audiosDir);
+
+// 对 JSON 数据文件同样做权限修复后再创建
+if (!file_exists($announcementsFile)) @file_put_contents($announcementsFile, json_encode([]));
+@chmod($announcementsFile, 0666);
+if (!file_exists($groupFilesFile)) @file_put_contents($groupFilesFile, json_encode([]));
+@chmod($groupFilesFile, 0666);
+if (!file_exists($buttonsFile)) @file_put_contents($buttonsFile, json_encode([]));
+@chmod($buttonsFile, 0666);
 
 // 确保用户数据文件存在（账号.txt 格式：邮箱/名称/密码，每个用户3行）
 $usersFile = __DIR__ . '/账号.txt';
-if (!file_exists($usersFile)) file_put_contents($usersFile, '');
+if (!file_exists($usersFile)) @file_put_contents($usersFile, '');
+@chmod($usersFile, 0666);
+
+function writeTxtFile($path, $content)
+{
+    // 先尝试 file_put_contents
+    $r1 = @file_put_contents($path, $content, LOCK_EX);
+    if ($r1 !== false) {
+        @chmod($path, 0666);
+        return true;
+    }
+    // 再尝试 fopen 方式
+    $dir = dirname($path);
+    if (!is_writable($dir)) @chmod($dir, 0777);
+    $fp = @fopen($path, 'w');
+    if ($fp) {
+        @flock($fp, LOCK_EX);
+        $written = @fwrite($fp, $content);
+        @fflush($fp);
+        @flock($fp, LOCK_UN);
+        @fclose($fp);
+        if ($written !== false) {
+            @chmod($path, 0666);
+            return true;
+        }
+    }
+    return false;
+}
 
 function readUsers() {
     global $usersFile;
-    $lines = file($usersFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!file_exists($usersFile)) {
+        // 文件不存在：检查 session 降级存储
+        if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+        if (isset($_SESSION['fallback_users']) && is_array($_SESSION['fallback_users']) && count($_SESSION['fallback_users']) > 0) {
+            return $_SESSION['fallback_users'];
+        }
+        return [];
+    }
+    $lines = @file($usersFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false || count($lines) === 0) {
+        // 文件不可读：检查 session 降级存储
+        if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+        if (isset($_SESSION['fallback_users']) && is_array($_SESSION['fallback_users']) && count($_SESSION['fallback_users']) > 0) {
+            return $_SESSION['fallback_users'];
+        }
+        return [];
+    }
     $users = [];
     // 每3行是一个用户：email / username / password
     for ($i = 0; $i < count($lines); $i += 3) {
@@ -81,7 +143,8 @@ function readUsers() {
     // 从管理员列表.txt 读取管理员
     $adminFile = __DIR__ . '/管理员列表.txt';
     if (file_exists($adminFile)) {
-        $admins = file($adminFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $admins = @file($adminFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($admins === false) $admins = [];
         foreach ($users as &$user) {
             if ($user['role'] !== 'owner' && in_array($user['username'], $admins)) {
                 $user['role'] = 'admin';
@@ -99,7 +162,12 @@ function saveUsers($users) {
         $content .= $user['username'] . "\n";
         $content .= $user['password'] . "\n";
     }
-    file_put_contents($usersFile, $content);
+    $ok = writeTxtFile($usersFile, $content);
+    if (!$ok) {
+        // 即使文件写入失败，也要记录 session 以便下次读取（降级存储）
+        @session_start();
+        $_SESSION['fallback_users'] = $users;
+    }
     // 同步更新管理员列表.txt
     $adminFile = __DIR__ . '/管理员列表.txt';
     $adminList = '';
@@ -108,7 +176,8 @@ function saveUsers($users) {
             $adminList .= $user['username'] . "\n";
         }
     }
-    file_put_contents($adminFile, $adminList);
+    writeTxtFile($adminFile, $adminList);
+    return $ok;
 }
 
 function cleanOldMessages() {
@@ -704,15 +773,24 @@ switch ($action) {
             json_output(['success' => false, 'message' => '该邮箱已被注册，请直接登录或使用其他邮箱']);
         }
 
-        // 处理头像上传
+        // 处理头像上传（增强版：确保目录可写+chmod）
         $avatarPath = '';
         if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
             $file = $_FILES['avatar'];
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])) {
+                global $avatarsDir;
+                ensureDir($avatarsDir);
                 $filename = $username . '_' . time() . '.' . $ext;
                 $filepath = $avatarsDir . $filename;
-                if (@move_uploaded_file($file['tmp_name'], $filepath)) {
+                // 先尝试 move_uploaded_file
+                $moved = @move_uploaded_file($file['tmp_name'], $filepath);
+                if (!$moved) {
+                    // 降级方案：copy 方式（某些服务器上move_uploaded_file受限）
+                    $moved = @copy($file['tmp_name'], $filepath);
+                }
+                if ($moved) {
+                    @chmod($filepath, 0644);
                     $avatarPath = 'uploads/avatars/' . $filename;
                 }
             }
@@ -737,7 +815,7 @@ switch ($action) {
         if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
         $_SESSION['username'] = $username;
         $_SESSION['email'] = $email;
-        $_SESSION['avatar'] = '';
+        $_SESSION['avatar'] = $avatarPath;
         $_SESSION['role'] = $role;
 
         // 发送欢迎消息
@@ -749,11 +827,19 @@ switch ($action) {
                 $welcome = str_replace('{username}', $username, $config['welcome']);
                 $messagesFile = __DIR__ . '/信息.txt';
                 $msgLine = '|' . $botName . '|' . $welcome . '|' . time() . "\n";
-                @file_put_contents($messagesFile, $msgLine, FILE_APPEND);
+                // 使用 writeTxtFile 或直接追加
+                if (!is_writable($messagesFile)) @chmod($messagesFile, 0666);
+                $fp = @fopen($messagesFile, 'a');
+                if ($fp) {
+                    @fwrite($fp, $msgLine);
+                    @fclose($fp);
+                } else {
+                    @file_put_contents($messagesFile, $msgLine, FILE_APPEND);
+                }
             }
         }
 
-        json_output(['success' => true, 'message' => '注册成功！', 'autoLogin' => true]);
+        json_output(['success' => true, 'message' => '注册成功！', 'avatar' => $avatarPath, 'autoLogin' => true]);
         break;
 
     case 'register':
