@@ -399,9 +399,10 @@
                 formData.append('action', 'checkUsername');
                 formData.append('username', username);
 
-                const response = await fetch('api.php', {
+                const response = await fetch(window.location.origin + '/api.php', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
                 const data = await response.json();
 
@@ -450,9 +451,10 @@
                 formData.append('action', 'checkEmail');
                 formData.append('email', email);
 
-                const response = await fetch('api.php', {
+                const response = await fetch(window.location.origin + '/api.php', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
                 const data = await response.json();
 
@@ -489,9 +491,10 @@
                 formData.append('action', 'sendCode');
                 formData.append('email', email);
 
-                const response = await fetch('api.php', {
+                const response = await fetch(window.location.origin + '/api.php', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
                 const data = await response.json();
 
@@ -547,10 +550,19 @@
                     formData.append('avatar', selectedAvatar);
                 }
 
-                const response = await fetch('api.php', {
+                const response = await fetch(window.location.origin + window.location.pathname.replace('register.php', 'api.php'), {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
+
+                if (!response.ok) {
+                    showMessage('服务器响应异常: ' + response.status, 'error');
+                    btn.disabled = false;
+                    btn.textContent = '完成注册';
+                    return;
+                }
+
                 const data = await response.json();
 
                 if (data.success) {
@@ -562,7 +574,8 @@
                     showMessage(data.message, 'error');
                 }
             } catch (err) {
-                showMessage('网络错误，请重试', 'error');
+                console.error('注册错误:', err);
+                showMessage('网络错误，请检查网络连接或重试', 'error');
             }
 
             btn.disabled = false;
